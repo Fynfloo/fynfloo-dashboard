@@ -2,7 +2,8 @@
 fynfloo-dashboard/
 │
 ├── app/                          # Next.js App Router — routing only
-│   ├── (auth)/                   # Auth route group — no layout
+│   ├── (auth)/                   # Auth route group — shared dark layout
+│   │   ├── layout.tsx            # Dark bg, logo, wordmark, footer
 │   │   ├── login/
 │   │   │   └── page.tsx
 │   │   ├── signup/
@@ -67,21 +68,24 @@ fynfloo-dashboard/
 │   ├── layout.tsx                # Root layout — Providers only
 │   ├── page.tsx                  # Redirects to /login
 │   ├── providers.tsx             # TanStack Query provider
-│   └── globals.css
+│   └── globals.css               # Brand tokens, base styles
 │
 ├── features/                     # Feature modules — business logic
+│   │                             # Pattern: component imports hook
+│   │                             # Hook calls apiRequest directly
+│   │                             # No intermediate api.ts layer
 │   ├── auth/
 │   │   ├── components/
-│   │   │   ├── LoginForm.tsx
-│   │   │   ├── SignupForm.tsx
-│   │   │   ├── MfaForm.tsx
+│   │   │   ├── LoginForm.tsx     # ✅ Done
+│   │   │   ├── SignupForm.tsx    # ✅ Done
+│   │   │   ├── ConfirmEmailForm.tsx
 │   │   │   ├── ForgotPasswordForm.tsx
 │   │   │   └── ResetPasswordForm.tsx
-│   │   ├── hooks/
-│   │   │   ├── useLogin.ts
-│   │   │   ├── useSignup.ts
-│   │   │   └── useMfa.ts
-│   │   └── api.ts                # Auth API calls
+│   │   └── hooks/
+│   │       ├── useLogin.ts       # ✅ Done — login + MFA + hydration
+│   │       ├── useSignup.ts      # ✅ Done
+│   │       ├── useForgotPassword.ts
+│   │       └── useResetPassword.ts
 │   │
 │   ├── onboarding/
 │   │   ├── components/
@@ -89,9 +93,8 @@ fynfloo-dashboard/
 │   │   │   ├── StepTemplate.tsx
 │   │   │   ├── StepCurrency.tsx
 │   │   │   └── OnboardingShell.tsx
-│   │   ├── hooks/
-│   │   │   └── useOnboarding.ts
-│   │   └── api.ts
+│   │   └── hooks/
+│   │       └── useOnboarding.ts
 │   │
 │   ├── products/
 │   │   ├── components/
@@ -100,29 +103,26 @@ fynfloo-dashboard/
 │   │   │   ├── ProductImageUpload.tsx
 │   │   │   ├── InventoryPanel.tsx
 │   │   │   └── SeoPanel.tsx
-│   │   ├── hooks/
-│   │   │   ├── useProducts.ts
-│   │   │   └── useProduct.ts
-│   │   └── api.ts
+│   │   └── hooks/
+│   │       ├── useProducts.ts
+│   │       └── useProduct.ts
 │   │
 │   ├── orders/
 │   │   ├── components/
 │   │   │   ├── OrderList.tsx
 │   │   │   ├── OrderDetail.tsx
 │   │   │   └── FulfilmentPanel.tsx
-│   │   ├── hooks/
-│   │   │   ├── useOrders.ts
-│   │   │   └── useOrder.ts
-│   │   └── api.ts
+│   │   └── hooks/
+│   │       ├── useOrders.ts
+│   │       └── useOrder.ts
 │   │
 │   ├── analytics/
 │   │   ├── components/
 │   │   │   ├── MetricsBar.tsx
 │   │   │   ├── RevenueChart.tsx
 │   │   │   └── TopProducts.tsx
-│   │   ├── hooks/
-│   │   │   └── useAnalytics.ts
-│   │   └── api.ts
+│   │   └── hooks/
+│   │       └── useAnalytics.ts
 │   │
 │   ├── settings/
 │   │   ├── components/
@@ -133,33 +133,32 @@ fynfloo-dashboard/
 │   │   │   ├── DomainSettings.tsx
 │   │   │   ├── SecuritySettings.tsx
 │   │   │   └── DeliverySettings.tsx
-│   │   ├── hooks/
-│   │   │   └── useSettings.ts
-│   │   └── api.ts
+│   │   └── hooks/
+│   │       └── useSettings.ts
 │   │
 │   ├── discounts/
 │   │   ├── components/
 │   │   │   ├── DiscountList.tsx
 │   │   │   └── DiscountForm.tsx
-│   │   ├── hooks/
-│   │   │   └── useDiscounts.ts
-│   │   └── api.ts
+│   │   └── hooks/
+│   │       └── useDiscounts.ts
 │   │
 │   └── admin/
 │       ├── components/
 │       │   ├── MerchantList.tsx
 │       │   └── MerchantDetail.tsx
-│       ├── hooks/
-│       │   └── useAdmin.ts
-│       └── api.ts
+│       └── hooks/
+│           └── useAdmin.ts
 │
 ├── components/                   # Shared UI — no business logic
-│   ├── ui/                       # shadcn primitives (auto-generated)
-│   │   ├── button.tsx
-│   │   ├── input.tsx
-│   │   ├── label.tsx
-│   │   ├── card.tsx
-│   │   └── ...
+│   ├── ui/                       # Hand-rolled — no shadcn
+│   │   ├── button.tsx            # ✅ primary, secondary, ghost, destructive
+│   │   ├── input.tsx             # ✅ with error state
+│   │   ├── label.tsx             # ✅
+│   │   ├── card.tsx              # ✅ Card, CardHeader, CardTitle,
+│   │   │                         #    CardDescription, CardContent
+│   │   └── badge.tsx             # ✅ default, success, warning,
+│   │                             #    destructive, accent
 │   ├── layout/                   # Layout building blocks
 │   │   ├── Sidebar.tsx
 │   │   ├── Header.tsx
@@ -176,21 +175,25 @@ fynfloo-dashboard/
 │       └── StatusBadge.tsx       # Order/payment status badges
 │
 ├── lib/                          # Pure utilities — no React
-│   ├── api.ts                    # apiRequest + token management
-│   ├── auth.ts                   # getMe, logout helpers
-│   ├── types.ts                  # Shared TypeScript types
-│   ├── utils.ts                  # cn(), formatCurrency(), formatDate()
-│   └── constants.ts              # TEMPLATES, CURRENCIES, etc.
+│   ├── api.ts                    # ✅ apiRequest + Bearer token
+│   │                             #    + silent refresh on 401
+│   ├── auth.ts                   # ✅ getMe, logout helpers
+│   ├── types.ts                  # ✅ aligned with backend shapes
+│   ├── utils.ts                  # ✅ cn, formatCurrency,
+│   │                             #    formatDate, getInitials
+│   └── constants.ts              # ✅ TEMPLATES, ALL_CURRENCIES,
+│                                 #    NAV_ITEMS, deriveGateway
 │
 ├── hooks/                        # Shared React hooks
-│   ├── useAuth.ts                # useAuth — user + stores state
-│   ├── useStore.ts               # Current store from URL params
-│   └── useDebounce.ts
+│   ├── useAuth.ts                # ✅ reads from Zustand auth store
+│   ├── useStore.ts               # ✅ current store from URL params
+│   └── useDebounce.ts            # ✅
 │
 ├── store/                        # Zustand global state
-│   ├── auth.store.ts             # user, stores, accessToken
-│   └── ui.store.ts               # sidebar open/close, etc.
+│   ├── auth.store.ts             # ✅ user, stores, isLoading,
+│   │                             #    isInitialised, reset
+│   └── ui.store.ts               # ✅ sidebarOpen, toggleSidebar
 │
-├── middleware.ts                 # Next.js middleware
+├── proxy.ts                      # Next.js middleware
 └── .env.local
 ```
