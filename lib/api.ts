@@ -53,6 +53,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    Accept: 'application/json',
   };
 
   if (token) {
