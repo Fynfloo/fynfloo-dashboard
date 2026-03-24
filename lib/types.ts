@@ -14,6 +14,7 @@ export type MeResponse = {
   email: string;
   tenants: TenantClaim[];
   platformRoles: PlatformRole[];
+  mfaEnabled: boolean;
 };
 
 // Shape returned by GET /api/stores (from tenant.service.ts listUserStores)

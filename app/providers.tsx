@@ -3,6 +3,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
+import { AuthInitialiser } from '@/components/shared/AuthInitialiser';
 
 type QueryError = {
   status?: number;
@@ -26,5 +27,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
       }),
   );
 
-  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AuthInitialiser>{children}</AuthInitialiser>
+    </QueryClientProvider>
+  );
 }
