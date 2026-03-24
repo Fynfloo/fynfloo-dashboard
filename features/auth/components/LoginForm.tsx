@@ -32,7 +32,7 @@ type LoginFields = z.infer<typeof loginSchema>;
 type MfaFields = z.infer<typeof mfaSchema>;
 type Step = 'password' | 'mfa';
 
-// ─── Small shared pieces ──────────────────────────────────────────────────────
+// ─── Shared pieces ────────────────────────────────────────────────────────────
 
 function FieldError({ message }: { message: string }) {
   return (
@@ -130,35 +130,40 @@ export function LoginForm() {
 
   return (
     <div
-      className="rounded-[var(--radius-xl)] p-8 space-y-6 w-full"
+      className="rounded-2xl p-10 space-y-7 w-full"
       style={{
         background: 'var(--bg-surface)',
-        border: '1px solid var(--bg-border-subtle)',
-        boxShadow: 'var(--shadow-card)',
+        boxShadow: '0 8px 60px rgba(0,0,0,0.4)',
       }}
     >
       {step === 'password' ? (
         <>
-          <div className="space-y-1">
+          {/* Header */}
+          <div className="space-y-1.5 text-center">
             <h1
-              className="text-lg font-semibold"
-              style={{ color: 'var(--text-primary)', letterSpacing: '-0.022em' }}
+              className="text-2xl font-bold"
+              style={{
+                color: 'var(--text-primary)',
+                letterSpacing: '-0.03em',
+              }}
             >
-              Welcome back
+              Sign in to your account
             </h1>
             <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-              Sign in to your Fynfloo account
+              Welcome back - enter your details below
             </p>
           </div>
 
+          {/* Alerts */}
           {lockoutMessage && <Banner message={lockoutMessage} variant="warning" />}
           {loginForm.formState.errors.root && (
             <Banner message={loginForm.formState.errors.root.message!} />
           )}
 
-          <form onSubmit={loginForm.handleSubmit(onLoginSubmit)} className="space-y-4">
+          {/* Form */}
+          <form onSubmit={loginForm.handleSubmit(onLoginSubmit)} className="space-y-5">
             <div>
-              <Label htmlFor="email" className="block mb-1.5">
+              <Label htmlFor="email" className="block mb-2">
                 Email address
               </Label>
               <Input
@@ -176,7 +181,7 @@ export function LoginForm() {
             </div>
 
             <div>
-              <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center justify-between mb-2">
                 <Label htmlFor="password">Password</Label>
                 <Link
                   href="/forgot-password"
@@ -202,31 +207,43 @@ export function LoginForm() {
             <Button
               type="submit"
               size="lg"
-              className="w-full"
+              className="w-full h-11 text-base"
               loading={isLoginPending}
               disabled={isLoginPending}
             >
-              {isLoginPending ? 'Signing in…' : 'Sign in'}
+              {isLoginPending ? 'Signing in…' : 'Continue'}
             </Button>
           </form>
 
-          <p className="text-center text-sm" style={{ color: 'var(--text-secondary)' }}>
+          {/* Footer */}
+          <p
+            className="text-center text-sm pt-2"
+            style={{
+              color: 'var(--text-secondary)',
+              borderTop: '1px solid var(--bg-border-subtle)',
+              paddingTop: '1.5rem',
+            }}
+          >
             Don&apos;t have an account?{' '}
             <Link
               href="/signup"
               className="font-medium hover:underline transition-colors"
               style={{ color: 'var(--accent)' }}
             >
-              Create one
+              Create one free
             </Link>
           </p>
         </>
       ) : (
         <>
-          <div className="space-y-1">
+          {/* MFA header */}
+          <div className="space-y-1.5 text-center">
             <h1
-              className="text-lg font-semibold"
-              style={{ color: 'var(--text-primary)', letterSpacing: '-0.022em' }}
+              className="text-2xl font-bold"
+              style={{
+                color: 'var(--text-primary)',
+                letterSpacing: '-0.03em',
+              }}
             >
               Two-factor authentication
             </h1>
@@ -239,9 +256,9 @@ export function LoginForm() {
             <Banner message={mfaForm.formState.errors.root.message!} />
           )}
 
-          <form onSubmit={mfaForm.handleSubmit(onMfaSubmit)} className="space-y-4">
+          <form onSubmit={mfaForm.handleSubmit(onMfaSubmit)} className="space-y-5">
             <div>
-              <Label htmlFor="code" className="block mb-1.5">
+              <Label htmlFor="code" className="block mb-2">
                 Authentication code
               </Label>
               <Input
@@ -253,7 +270,7 @@ export function LoginForm() {
                 placeholder="000000"
                 maxLength={6}
                 error={!!mfaForm.formState.errors.code}
-                className="text-center tracking-[0.5em] text-base font-mono"
+                className="text-center tracking-[0.5em] text-lg font-mono h-12"
                 {...mfaForm.register('code')}
               />
               {mfaForm.formState.errors.code && (
@@ -264,7 +281,7 @@ export function LoginForm() {
             <Button
               type="submit"
               size="lg"
-              className="w-full"
+              className="w-full h-11 text-base"
               loading={isMfaPending}
               disabled={isMfaPending}
             >
