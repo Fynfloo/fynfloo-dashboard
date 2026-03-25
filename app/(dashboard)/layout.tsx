@@ -1,8 +1,46 @@
 // app/(dashboard)/layout.tsx
+'use client';
+
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Header } from '@/components/layout/Header';
+import { useAuthStore } from '@/store/auth.store';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  const user = useAuthStore((s) => s.user);
+  const isInitialised = useAuthStore((s) => s.isInitialised);
+  const isLoading = useAuthStore((s) => s.isLoading);
+
+  useEffect(() => {
+    if (!isInitialised) return;
+    if (!user) {
+      router.replace('/login');
+    }
+  }, [isInitialised, user]);
+
+  // Show nothing until auth is confirmed — prevents flash
+  if (!isInitialised || isLoading) {
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center"
+        style={{ background: 'var(--bg-base)' }}
+      >
+        <div
+          className="w-6 h-6 rounded-full border-2 animate-spin"
+          style={{
+            borderColor: 'var(--accent)',
+            borderTopColor: 'transparent',
+          }}
+        />
+      </div>
+    );
+  }
+
+  // Not authenticated — render nothing while redirect fires
+  if (!user) return null;
+
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: 'var(--bg-base)' }}>
       <Sidebar />

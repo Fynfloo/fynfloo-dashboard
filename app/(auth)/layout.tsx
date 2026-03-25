@@ -1,8 +1,45 @@
 // app/(auth)/layout.tsx
+'use client';
+
 import Image from 'next/image';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useAuthStore } from '@/store/auth.store';
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  const user = useAuthStore((s) => s.user);
+  const isInitialised = useAuthStore((s) => s.isInitialised);
+
+  useEffect(() => {
+    if (!isInitialised) return;
+    if (user) {
+      router.replace('/dashboard');
+    }
+  }, [isInitialised, user]);
+
+  // Show spinner while auth check is in progress
+  if (!isInitialised) {
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center"
+        style={{ backgroundColor: 'var(--text-primary)' }}
+      >
+        <div
+          className="w-6 h-6 rounded-full border-2 animate-spin"
+          style={{
+            borderColor: 'rgba(255,255,255,0.5)',
+            borderTopColor: 'transparent',
+          }}
+        />
+      </div>
+    );
+  }
+
+  // Already authenticated — render nothing while redirect fires
+  if (user) return null;
+
   return (
     <div
       className="min-h-screen flex flex-col items-center justify-center p-6"
