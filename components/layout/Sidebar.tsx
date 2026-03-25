@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils';
 import { useCurrentStore } from '@/hooks/useStore';
 import { useUiStore } from '@/store/ui.store';
 import { NAV_ITEMS } from '@/lib/constants';
+import Image from 'next/image';
 
 const ICONS: Record<string, LucideIcon> = {
   LayoutDashboard,
@@ -49,19 +50,7 @@ export function Sidebar() {
         className="flex items-center h-14 px-4 shrink-0"
         style={{ borderBottom: '1px solid var(--bg-border-subtle)' }}
       >
-        <div
-          className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
-          style={{ background: 'var(--accent)' }}
-        >
-          <svg width="16" height="16" viewBox="0 0 28 28" fill="none">
-            <path
-              d="M6 8C6 6.9 6.9 6 8 6h8l6 6v8c0 1.1-.9 2-2 2H8c-1.1 0-2-.9-2-2V8z"
-              fill="white"
-              fillOpacity="0.9"
-            />
-            <path d="M16 6l6 6h-4c-1.1 0-2-.9-2-2V6z" fill="white" fillOpacity="0.5" />
-          </svg>
-        </div>
+        <Image src="/logo-1024.png" alt="fynfloo" width={28} height={28} />
         {sidebarOpen && (
           <span
             className="ml-2.5 text-base font-bold"
