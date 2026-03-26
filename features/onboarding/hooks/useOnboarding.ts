@@ -61,6 +61,7 @@ export function useOnboarding() {
         id: res.tenantId,
         name: data.storeName,
         subdomain: data.subdomain,
+        currency: data.currency,
       };
       setStores([...stores, newStore]);
 
