@@ -1,4 +1,5 @@
 // features/auth/hooks/useLogin.ts
+import { useState } from 'react';
 import { setAccessToken, apiRequest } from '@/lib/api';
 import { getMe } from '@/lib/auth';
 import { useAuthStore } from '@/store/auth.store';
@@ -48,10 +49,10 @@ async function hydrateUser(
 
 export function useLogin() {
   const { setUser, setStores, setLoading } = useAuthStore();
-  let isPending = false;
+  const [isPending, setIsPending] = useState(false); // ← useState not let
 
   async function login(input: LoginInput): Promise<LoginResult> {
-    isPending = true;
+    setIsPending(true);
     try {
       const res = await apiRequest<LoginResponse>('/auth/login', {
         method: 'POST',
@@ -70,7 +71,7 @@ export function useLogin() {
 
       return { requiresMfa: false };
     } finally {
-      isPending = false;
+      setIsPending(false);
     }
   }
 
@@ -81,10 +82,10 @@ export function useLogin() {
 
 export function useMfaVerify() {
   const { setUser, setStores, setLoading } = useAuthStore();
-  let isPending = false;
+  const [isPending, setIsPending] = useState(false);
 
   async function verifyMfa(input: MfaInput): Promise<void> {
-    isPending = true;
+    setIsPending(true);
     try {
       const res = await apiRequest<MfaVerifyResponse>('/auth/mfa/verify', {
         method: 'POST',
@@ -94,7 +95,7 @@ export function useMfaVerify() {
       setAccessToken(res.accessToken);
       await hydrateUser(setUser, setStores, setLoading);
     } finally {
-      isPending = false;
+      setIsPending(false);
     }
   }
 
