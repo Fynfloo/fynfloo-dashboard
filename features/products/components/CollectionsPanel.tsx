@@ -2,16 +2,46 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Lightbulb, AlertTriangle } from 'lucide-react';
 import { useCollections, useProductCollections } from '@/features/products/hooks/useCollections';
 import type { Collection } from '@/features/products/hooks/useCollections';
+import { Button } from '@/components/ui/button';
+
+// Map collection types/names to human descriptions
+function getCollectionDescription(collection: Collection): string {
+  if (collection.description) return collection.description;
+  const name = collection.name.toLowerCase();
+  if (name.includes('featured') || name.includes('feature')) {
+    return 'Appears in the featured products section on your store homepage';
+  }
+  if (name.includes('new') || name.includes('arrival')) {
+    return 'Appears in your new arrivals section';
+  }
+  if (name.includes('best') || name.includes('popular') || name.includes('top')) {
+    return 'Appears in your top sellers section';
+  }
+  if (name.includes('sale') || name.includes('discount')) {
+    return 'Appears in your sale section';
+  }
+  return `Products in this collection are grouped under "${collection.name}"`;
+}
+
+// Is this a Featured collection?
+function isFeatured(collection: Collection): boolean {
+  return (
+    collection.name.toLowerCase().includes('featured') ||
+    collection.name.toLowerCase().includes('feature')
+  );
+}
 
 type Props = {
   storeId: string;
   productId: string;
   disabled?: boolean;
+  onCollectionChange?: (hasCollections: boolean) => void;
 };
 
-export function CollectionsPanel({ storeId, productId, disabled }: Props) {
+export function CollectionsPanel({ storeId, productId, disabled, onCollectionChange }: Props) {
   const { listCollections } = useCollections(storeId);
   const { listProductCollections, addToCollection, removeFromCollection, isPending } =
     useProductCollections(storeId, productId);
@@ -20,6 +50,7 @@ export function CollectionsPanel({ storeId, productId, disabled }: Props) {
   const [memberIds, setMemberIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [dismissedWarning, setDismissedWarning] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -28,7 +59,9 @@ export function CollectionsPanel({ storeId, productId, disabled }: Props) {
       try {
         const [all, current] = await Promise.all([listCollections(), listProductCollections()]);
         setAllCollections(all);
-        setMemberIds(new Set(current.map((c) => c.id)));
+        const ids = new Set(current.map((c) => c.id));
+        setMemberIds(ids);
+        onCollectionChange?.(ids.size > 0);
       } catch {
         setError('Failed to load collections');
       } finally {
@@ -50,6 +83,7 @@ export function CollectionsPanel({ storeId, productId, disabled }: Props) {
       } else {
         next.add(collectionId);
       }
+      onCollectionChange?.(next.size > 0);
       return next;
     });
 
@@ -60,7 +94,7 @@ export function CollectionsPanel({ storeId, productId, disabled }: Props) {
         await addToCollection(collectionId);
       }
     } catch {
-      // Revert optimistic update on failure
+      // Revert on failure
       setMemberIds((prev) => {
         const next = new Set(prev);
         if (isMember) {
@@ -68,10 +102,18 @@ export function CollectionsPanel({ storeId, productId, disabled }: Props) {
         } else {
           next.delete(collectionId);
         }
+        onCollectionChange?.(next.size > 0);
         return next;
       });
       setError('Failed to update collection — please try again');
     }
+  }
+
+  async function handleAddToFeatured() {
+    const featured = allCollections.find((c) => isFeatured(c));
+    if (!featured) return;
+    await handleToggle(featured.id);
+    setDismissedWarning(true);
   }
 
   if (loading) {
@@ -96,77 +138,133 @@ export function CollectionsPanel({ storeId, productId, disabled }: Props) {
     );
   }
 
+  const noCollectionSelected = memberIds.size === 0;
+  const hasFeaturedCollection = allCollections.some((c) => isFeatured(c));
+  const showWarning = noCollectionSelected && !dismissedWarning;
+
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       {error && (
         <p className="text-xs" style={{ color: 'var(--red)' }}>
           {error}
         </p>
       )}
 
-      {allCollections.map((collection) => {
-        const checked = memberIds.has(collection.id);
-        return (
-          <button
-            key={collection.id}
-            type="button"
-            onClick={() => handleToggle(collection.id)}
-            disabled={disabled || isPending}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all duration-150"
-            style={{
-              background: checked ? 'var(--accent-dim)' : 'var(--bg-elevated)',
-              border: checked ? '1px solid rgba(88,81,234,0.3)' : '1px solid transparent',
-              opacity: disabled || isPending ? 0.6 : 1,
-              cursor: disabled || isPending ? 'not-allowed' : 'pointer',
-            }}
-          >
-            {/* Checkbox */}
-            <div
-              className="w-4 h-4 rounded flex items-center justify-center shrink-0 transition-all duration-150"
+      {/* Collection checkboxes */}
+      <div className="space-y-2">
+        {allCollections.map((collection) => {
+          const checked = memberIds.has(collection.id);
+          const desc = getCollectionDescription(collection);
+          return (
+            <button
+              key={collection.id}
+              type="button"
+              onClick={() => handleToggle(collection.id)}
+              disabled={disabled || isPending}
+              className="w-full flex items-start gap-3 px-3 py-2.5 rounded-lg text-left transition-all duration-150"
               style={{
-                background: checked ? 'var(--accent)' : 'var(--bg-surface)',
-                border: checked ? '1px solid var(--accent)' : '1px solid var(--bg-border)',
+                background: checked ? 'var(--accent-dim)' : 'var(--bg-elevated)',
+                border: checked ? '1px solid rgba(88,81,234,0.3)' : '1px solid transparent',
+                opacity: disabled || isPending ? 0.6 : 1,
+                cursor: disabled || isPending ? 'not-allowed' : 'pointer',
               }}
             >
-              {checked && (
-                <svg
-                  className="w-2.5 h-2.5"
-                  viewBox="0 0 10 8"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M1 4L3.5 6.5L9 1"
-                    stroke="white"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              )}
-            </div>
-
-            {/* Label */}
-            <div className="flex-1 min-w-0">
-              <p
-                className="text-sm font-medium truncate"
+              {/* Checkbox */}
+              <div
+                className="mt-0.5 w-4 h-4 rounded flex items-center justify-center shrink-0 transition-all duration-150"
                 style={{
-                  color: checked ? 'var(--accent)' : 'var(--text-primary)',
+                  background: checked ? 'var(--accent)' : 'var(--bg-surface)',
+                  border: checked ? '1px solid var(--accent)' : '1px solid var(--bg-border)',
                 }}
               >
-                {collection.name}
+                {checked && (
+                  <svg className="w-2.5 h-2.5" viewBox="0 0 10 8" fill="none">
+                    <path
+                      d="M1 4L3.5 6.5L9 1"
+                      stroke="white"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                )}
+              </div>
+
+              {/* Label + description */}
+              <div className="flex-1 min-w-0">
+                <p
+                  className="text-sm font-medium"
+                  style={{ color: checked ? 'var(--accent)' : 'var(--text-primary)' }}
+                >
+                  {collection.name}
+                </p>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                  {desc}
+                </p>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* No collection warning */}
+      {showWarning && (
+        <div
+          className="rounded-lg p-3 space-y-2"
+          style={{ background: 'var(--amber-bg)', border: '1px solid var(--amber-border)' }}
+        >
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" style={{ color: 'var(--amber)' }} />
+            <div>
+              <p className="text-xs font-medium" style={{ color: 'var(--amber)' }}>
+                No collection selected
               </p>
-              <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                {collection._count.products} product{collection._count.products !== 1 ? 's' : ''}
+              <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                Your product will only appear on the /products page, not on your homepage.
               </p>
             </div>
-          </button>
-        );
-      })}
+          </div>
+          {hasFeaturedCollection && (
+            <div className="flex gap-2 pl-6">
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleAddToFeatured}
+                disabled={isPending}
+                className="text-xs h-7 px-2.5"
+              >
+                Add to Featured
+              </Button>
+              <button
+                type="button"
+                onClick={() => setDismissedWarning(true)}
+                className="text-xs px-2.5 h-7 rounded-md transition-colors"
+                style={{ color: 'var(--text-secondary)' }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'var(--bg-elevated)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent';
+                }}
+              >
+                Skip for now
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
-      <p className="text-xs pt-1" style={{ color: 'var(--text-tertiary)' }}>
-        Changes save immediately — no need to click Save changes
-      </p>
+      {/* Homepage tip */}
+      <div className="flex items-start gap-2 pt-1">
+        <Lightbulb
+          className="h-3.5 w-3.5 shrink-0 mt-0.5"
+          style={{ color: 'var(--text-tertiary)' }}
+        />
+        <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+          Tick &ldquo;Featured&rdquo; to show this product on your homepage immediately. Changes
+          save automatically — no need to click Save changes.
+        </p>
+      </div>
     </div>
   );
 }
