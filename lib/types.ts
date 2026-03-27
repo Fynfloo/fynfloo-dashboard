@@ -96,6 +96,7 @@ export type ProductListItem = {
   status: ProductStatus;
   publishedAt: string | null;
   createdAt: string;
+  updatedAt: string;
   image: ProductImage | null;
   inventory: ProductInventory | null;
 };
@@ -110,7 +111,7 @@ export type ProductListResponse = {
 export type CreateProductInput = {
   title: string;
   description?: string;
-  price: number;
+  price?: number;
   compareAtPrice?: number;
   status?: ProductStatus;
   sku?: string;

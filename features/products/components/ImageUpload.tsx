@@ -2,7 +2,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { Upload, X, GripVertical, AlertCircle } from 'lucide-react';
+import { Upload, X, GripVertical, AlertCircle, Camera } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ProductImage } from '@/lib/types';
 
@@ -20,8 +20,9 @@ export function ImageUpload({ images, onUpload, onDelete, onReorder, disabled }:
   const [error, setError] = useState('');
   const [dragItem, setDragItem] = useState<number | null>(null);
   const [dragOver, setDragOver] = useState<number | null>(null);
+  const [mainTooltipVisible, setMainTooltipVisible] = useState(false);
 
-  // ─── File drop / select ──────────────────────────────────────────────────
+  // ─── File handling ────────────────────────────────────────────────────────
 
   const handleFiles = useCallback(
     async (files: FileList | null) => {
@@ -60,12 +61,11 @@ export function ImageUpload({ images, onUpload, onDelete, onReorder, disabled }:
     handleFiles(e.dataTransfer.files);
   }
 
-  // ─── Image reorder ───────────────────────────────────────────────────────
+  // ─── Reorder ──────────────────────────────────────────────────────────────
 
   function handleDragStart(index: number) {
     setDragItem(index);
   }
-
   function handleDragEnter(index: number) {
     setDragOver(index);
   }
@@ -76,16 +76,12 @@ export function ImageUpload({ images, onUpload, onDelete, onReorder, disabled }:
       setDragOver(null);
       return;
     }
-
     const reordered = [...images];
     const [moved] = reordered.splice(dragItem, 1);
     reordered.splice(dragOver, 0, moved);
-
     const withPositions = reordered.map((img, i) => ({ id: img.id, position: i }));
-
     setDragItem(null);
     setDragOver(null);
-
     try {
       await onReorder(withPositions);
     } catch {
@@ -93,8 +89,25 @@ export function ImageUpload({ images, onUpload, onDelete, onReorder, disabled }:
     }
   }
 
+  // ─── Count helper text ────────────────────────────────────────────────────
+
+  function getCountText(): string {
+    if (images.length === 0) return 'No images yet — add your first image';
+    if (images.length === 1) return '1 image added — add more to show different angles';
+    if (images.length === 2) return '2 images — consider adding a detail shot';
+    return `${images.length} images added`;
+  }
+
   return (
     <div className="space-y-3">
+      {/* Image count context */}
+      <p
+        className="text-xs"
+        style={{ color: images.length === 0 ? 'var(--amber)' : 'var(--text-tertiary)' }}
+      >
+        {getCountText()}
+      </p>
+
       {/* Drop zone */}
       <div
         onDrop={handleDrop}
@@ -106,8 +119,8 @@ export function ImageUpload({ images, onUpload, onDelete, onReorder, disabled }:
         className={cn(
           'relative flex flex-col items-center justify-center gap-2',
           'rounded-xl border-2 border-dashed p-8 transition-all duration-150',
-          'cursor-pointer',
           disabled && 'opacity-50 cursor-not-allowed',
+          !disabled && 'cursor-pointer',
         )}
         style={{
           borderColor: isDraggingOver ? 'var(--accent)' : 'var(--bg-border)',
@@ -131,17 +144,31 @@ export function ImageUpload({ images, onUpload, onDelete, onReorder, disabled }:
           className="w-10 h-10 rounded-xl flex items-center justify-center"
           style={{ background: 'var(--bg-surface)' }}
         >
-          <Upload
-            className="h-5 w-5"
-            style={{ color: isDraggingOver ? 'var(--accent)' : 'var(--text-tertiary)' }}
-          />
+          {uploading ? (
+            <div
+              className="w-5 h-5 rounded-full border-2 animate-spin"
+              style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }}
+            />
+          ) : (
+            <Upload
+              className="h-5 w-5"
+              style={{ color: isDraggingOver ? 'var(--accent)' : 'var(--text-tertiary)' }}
+            />
+          )}
         </div>
         <div className="text-center">
           <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-            {uploading ? 'Uploading…' : 'Drop images here or click to upload'}
+            {uploading
+              ? 'Uploading…'
+              : isDraggingOver
+                ? 'Drop to upload'
+                : 'Drop images here or click to upload'}
           </p>
           <p className="text-xs mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
             JPEG, PNG, WebP — max 5MB each
+          </p>
+          <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>
+            Products with images get significantly more views and convert better
           </p>
         </div>
       </div>
@@ -177,7 +204,7 @@ export function ImageUpload({ images, onUpload, onDelete, onReorder, disabled }:
                 className="w-full h-full object-cover"
               />
 
-              {/* Overlay on hover */}
+              {/* Hover overlay */}
               <div
                 className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1"
                 style={{ background: 'rgba(0,0,0,0.4)' }}
@@ -198,7 +225,7 @@ export function ImageUpload({ images, onUpload, onDelete, onReorder, disabled }:
                       setError('Failed to delete image');
                     }
                   }}
-                  className="p-1 rounded transition-colors"
+                  className="p-1 rounded"
                   style={{ color: 'white' }}
                   title="Delete image"
                 >
@@ -206,16 +233,31 @@ export function ImageUpload({ images, onUpload, onDelete, onReorder, disabled }:
                 </button>
               </div>
 
-              {/* Position badge */}
+              {/* Main badge with tooltip */}
               {index === 0 && (
-                <div
-                  className="absolute top-1 left-1 px-1.5 py-0.5 rounded text-xs font-medium"
-                  style={{
-                    background: 'rgba(0,0,0,0.6)',
-                    color: 'white',
-                  }}
-                >
-                  Main
+                <div className="relative">
+                  <div
+                    className="absolute top-1 left-1 px-1.5 py-0.5 rounded text-xs font-medium cursor-help"
+                    style={{ background: 'rgba(0,0,0,0.6)', color: 'white' }}
+                    onMouseEnter={() => setMainTooltipVisible(true)}
+                    onMouseLeave={() => setMainTooltipVisible(false)}
+                  >
+                    Main
+                  </div>
+                  {mainTooltipVisible && (
+                    <div
+                      className="absolute top-8 left-0 w-48 px-2.5 py-2 rounded-lg text-xs z-10"
+                      style={{
+                        background: 'var(--bg-surface)',
+                        border: '1px solid var(--bg-border-subtle)',
+                        boxShadow: 'var(--shadow-elevated)',
+                        color: 'var(--text-secondary)',
+                      }}
+                    >
+                      This is your main product image shown on the product listing page. Drag to
+                      reorder.
+                    </div>
+                  )}
                 </div>
               )}
             </div>

@@ -17,35 +17,55 @@ type Props = {
   disabled?: boolean;
 };
 
+function Toggle({
+  checked,
+  onChange,
+  disabled,
+}: {
+  checked: boolean;
+  onChange: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={onChange}
+      disabled={disabled}
+      className="relative w-10 h-6 rounded-full transition-colors duration-200 shrink-0"
+      style={{
+        background: checked ? 'var(--accent)' : 'var(--bg-border)',
+        opacity: disabled ? 0.5 : 1,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+      }}
+    >
+      <span
+        className="absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200"
+        style={{ transform: checked ? 'translateX(16px)' : 'translateX(0)' }}
+      />
+    </button>
+  );
+}
+
 export function InventoryPanel({ value, onChange, disabled }: Props) {
   return (
     <div className="space-y-4">
       {/* Track stock toggle */}
-      <div className="flex items-center justify-between">
-        <div className="space-y-0.5">
+      <div className="flex items-start justify-between gap-4">
+        <div className="space-y-0.5 flex-1">
           <Label>Track quantity</Label>
           <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-            Monitor stock levels and show low stock warnings
+            Turn on to monitor your stock levels. Your store will automatically show &ldquo;Out of
+            stock&rdquo; when you run out, preventing overselling. Turn off if you make products to
+            order or have unlimited availability.
           </p>
         </div>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={value.trackQuantity}
-          onClick={() => onChange({ ...value, trackQuantity: !value.trackQuantity })}
+        <Toggle
+          checked={value.trackQuantity}
+          onChange={() => onChange({ ...value, trackQuantity: !value.trackQuantity })}
           disabled={disabled}
-          className="relative w-10 h-6 rounded-full transition-colors duration-200 shrink-0"
-          style={{
-            background: value.trackQuantity ? 'var(--accent)' : 'var(--bg-border)',
-          }}
-        >
-          <span
-            className="absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200"
-            style={{
-              transform: value.trackQuantity ? 'translateX(16px)' : 'translateX(0)',
-            }}
-          />
-        </button>
+        />
       </div>
 
       {/* Conditional fields */}
@@ -62,9 +82,13 @@ export function InventoryPanel({ value, onChange, disabled }: Props) {
                 onChange={(e) => onChange({ ...value, onHand: Number(e.target.value) })}
                 disabled={disabled}
               />
+              <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                How many units you have available to ship today. Your store counts down as customers
+                purchase.
+              </p>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="lowStockThreshold">Low stock threshold</Label>
+              <Label htmlFor="lowStockThreshold">Low stock alert at</Label>
               <Input
                 id="lowStockThreshold"
                 type="number"
@@ -73,35 +97,27 @@ export function InventoryPanel({ value, onChange, disabled }: Props) {
                 onChange={(e) => onChange({ ...value, lowStockThreshold: Number(e.target.value) })}
                 disabled={disabled}
               />
+              <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                You get alerted when stock drops to this number. If reordering takes 2 weeks and you
+                sell 2 per day, set this to 28.
+              </p>
             </div>
           </div>
 
           {/* Allow oversell toggle */}
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-0.5 flex-1">
               <Label>Continue selling when out of stock</Label>
               <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                Allow customers to purchase even if stock reaches zero
+                Allow customers to buy even when you show zero stock. Turn on for made-to-order
+                products. Turn off if you cannot fulfil orders when stock runs out.
               </p>
             </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={value.allowOversell}
-              onClick={() => onChange({ ...value, allowOversell: !value.allowOversell })}
+            <Toggle
+              checked={value.allowOversell}
+              onChange={() => onChange({ ...value, allowOversell: !value.allowOversell })}
               disabled={disabled}
-              className="relative w-10 h-6 rounded-full transition-colors duration-200 shrink-0"
-              style={{
-                background: value.allowOversell ? 'var(--accent)' : 'var(--bg-border)',
-              }}
-            >
-              <span
-                className="absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200"
-                style={{
-                  transform: value.allowOversell ? 'translateX(16px)' : 'translateX(0)',
-                }}
-              />
-            </button>
+            />
           </div>
         </div>
       )}
