@@ -23,6 +23,7 @@ import {
 import { formatCurrency } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
 import type { Product, ProductImage, ProductStatus } from '@/lib/types';
+import { CollectionsPanel } from './CollectionsPanel';
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
@@ -510,6 +511,12 @@ export function ProductForm({ mode }: { mode: 'create' | 'edit' }) {
                   : 'Hidden from storefront and search'}
             </p>
           </Section>
+
+          {mode === 'edit' && productId && (
+            <Section title="Collections">
+              <CollectionsPanel storeId={storeId} productId={productId} disabled={isPending} />
+            </Section>
+          )}
 
           {/* Summary — edit mode only */}
           {mode === 'edit' && product && (
