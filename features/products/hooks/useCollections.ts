@@ -42,42 +42,59 @@ export function useCollections(storeId: string) {
 // ─── useProductCollections — product membership ───────────────────────────────
 
 export function useProductCollections(storeId: string, productId: string) {
-  const [isPending, setIsPending] = useState(false);
+  // Track in-flight toggle IDs to prevent double-tap race conditions
+  const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
+
+  function isTogglePending(collectionId: string): boolean {
+    return pendingIds.has(collectionId);
+  }
 
   async function listProductCollections(): Promise<CollectionSimple[]> {
-    setIsPending(true);
-    try {
-      const res = await apiRequest<{ collections: CollectionSimple[] }>(
-        `/api/tenant/${storeId}/products/${productId}/collections`,
-      );
-      return res.collections;
-    } finally {
-      setIsPending(false);
-    }
+    const res = await apiRequest<{ collections: CollectionSimple[] }>(
+      `/api/tenant/${storeId}/products/${productId}/collections`,
+    );
+    return res.collections;
   }
 
   async function addToCollection(collectionId: string): Promise<void> {
-    setIsPending(true);
+    setPendingIds((prev) => new Set(prev).add(collectionId));
     try {
       await apiRequest(`/api/tenant/${storeId}/products/${productId}/collections`, {
         method: 'POST',
         body: { collectionId },
       });
     } finally {
-      setIsPending(false);
+      setPendingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(collectionId);
+        return next;
+      });
     }
   }
 
   async function removeFromCollection(collectionId: string): Promise<void> {
-    setIsPending(true);
+    setPendingIds((prev) => new Set(prev).add(collectionId));
     try {
       await apiRequest(`/api/tenant/${storeId}/products/${productId}/collections/${collectionId}`, {
         method: 'DELETE',
       });
     } finally {
-      setIsPending(false);
+      setPendingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(collectionId);
+        return next;
+      });
     }
   }
 
-  return { listProductCollections, addToCollection, removeFromCollection, isPending };
+  // isPending is true if ANY toggle is in flight — used for global disable
+  const isPending = pendingIds.size > 0;
+
+  return {
+    listProductCollections,
+    addToCollection,
+    removeFromCollection,
+    isTogglePending,
+    isPending,
+  };
 }

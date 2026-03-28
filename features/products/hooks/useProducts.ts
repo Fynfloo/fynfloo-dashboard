@@ -2,7 +2,7 @@
 'use client';
 
 import { useState } from 'react';
-import { apiRequest } from '@/lib/api';
+import { apiRequest, getAccessToken } from '@/lib/api';
 import type {
   Product,
   ProductListResponse,
@@ -12,7 +12,7 @@ import type {
   ProductStatus,
 } from '@/lib/types';
 
-// ─── useProducts — list ───────────────────────────────────────────────────────
+// ─── useProducts — list + create + delete ─────────────────────────────────────
 
 export function useProducts(storeId: string) {
   const [isPending, setIsPending] = useState(false);
@@ -27,8 +27,9 @@ export function useProducts(storeId: string) {
     setIsPending(true);
     try {
       const params = new URLSearchParams();
-      if (opts.page) params.set('page', String(opts.page));
-      if (opts.limit) params.set('limit', String(opts.limit));
+      // Use String() and explicit check — avoids falsy trap on page=0
+      if (opts.page !== undefined) params.set('page', String(opts.page));
+      if (opts.limit !== undefined) params.set('limit', String(opts.limit));
       if (opts.status) params.set('status', opts.status);
       const qs = params.toString();
       return await apiRequest<ProductListResponse>(
@@ -65,7 +66,7 @@ export function useProducts(storeId: string) {
   return { listProducts, createProduct, deleteProduct, isPending };
 }
 
-// ─── useProduct — single ──────────────────────────────────────────────────────
+// ─── useProduct — single get + update ────────────────────────────────────────
 
 export function useProduct(storeId: string, productId: string) {
   const [isPending, setIsPending] = useState(false);
@@ -100,13 +101,14 @@ export function useProductImages(storeId: string, productId: string) {
   const [isPending, setIsPending] = useState(false);
 
   async function uploadImage(file: File) {
+    if (!productId) throw new Error('Product must be saved before uploading images');
     setIsPending(true);
     try {
       const formData = new FormData();
       formData.append('file', file);
 
-      // apiRequest uses JSON by default — use fetch directly for multipart
-      const token = (await import('@/lib/api')).getAccessToken();
+      // getAccessToken is a static import — no dynamic import needed
+      const token = getAccessToken();
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/api/tenant/${storeId}/products/${productId}/images`,
         {

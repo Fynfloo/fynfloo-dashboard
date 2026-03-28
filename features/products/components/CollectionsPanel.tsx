@@ -1,32 +1,25 @@
 // features/products/components/CollectionsPanel.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Lightbulb, AlertTriangle } from 'lucide-react';
 import { useCollections, useProductCollections } from '@/features/products/hooks/useCollections';
 import type { Collection } from '@/features/products/hooks/useCollections';
 import { Button } from '@/components/ui/button';
 
-// Map collection types/names to human descriptions
 function getCollectionDescription(collection: Collection): string {
   if (collection.description) return collection.description;
   const name = collection.name.toLowerCase();
-  if (name.includes('featured') || name.includes('feature')) {
+  if (name.includes('featured') || name.includes('feature'))
     return 'Appears in the featured products section on your store homepage';
-  }
-  if (name.includes('new') || name.includes('arrival')) {
+  if (name.includes('new') || name.includes('arrival'))
     return 'Appears in your new arrivals section';
-  }
-  if (name.includes('best') || name.includes('popular') || name.includes('top')) {
+  if (name.includes('best') || name.includes('popular') || name.includes('top'))
     return 'Appears in your top sellers section';
-  }
-  if (name.includes('sale') || name.includes('discount')) {
-    return 'Appears in your sale section';
-  }
+  if (name.includes('sale') || name.includes('discount')) return 'Appears in your sale section';
   return `Products in this collection are grouped under "${collection.name}"`;
 }
 
-// Is this a Featured collection?
 function isFeatured(collection: Collection): boolean {
   return (
     collection.name.toLowerCase().includes('featured') ||
@@ -43,7 +36,7 @@ type Props = {
 
 export function CollectionsPanel({ storeId, productId, disabled, onCollectionChange }: Props) {
   const { listCollections } = useCollections(storeId);
-  const { listProductCollections, addToCollection, removeFromCollection, isPending } =
+  const { listProductCollections, addToCollection, removeFromCollection, isTogglePending } =
     useProductCollections(storeId, productId);
 
   const [allCollections, setAllCollections] = useState<Collection[]>([]);
@@ -52,40 +45,57 @@ export function CollectionsPanel({ storeId, productId, disabled, onCollectionCha
   const [error, setError] = useState('');
   const [dismissedWarning, setDismissedWarning] = useState(false);
 
+  // Ref to avoid calling onCollectionChange inside a state updater (React Strict Mode safe)
+  const onCollectionChangeRef = useRef(onCollectionChange);
+  onCollectionChangeRef.current = onCollectionChange;
+
   useEffect(() => {
+    let cancelled = false;
+
     async function load() {
       setLoading(true);
       setError('');
       try {
         const [all, current] = await Promise.all([listCollections(), listProductCollections()]);
+        if (cancelled) return;
         setAllCollections(all);
         const ids = new Set(current.map((c) => c.id));
         setMemberIds(ids);
-        onCollectionChange?.(ids.size > 0);
+        // Safe to call here — outside state updater, after data has settled
+        onCollectionChangeRef.current?.(ids.size > 0);
       } catch {
-        setError('Failed to load collections');
+        if (!cancelled) setError('Failed to load collections');
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
+
     load();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productId, storeId]);
 
   async function handleToggle(collectionId: string) {
-    if (disabled || isPending) return;
+    // Block if this specific collection is already toggling
+    if (disabled || isTogglePending(collectionId)) return;
+
     const isMember = memberIds.has(collectionId);
 
+    // Compute next state first — then update state and notify parent separately
+    const nextIds = new Set(memberIds);
+    if (isMember) {
+      nextIds.delete(collectionId);
+    } else {
+      nextIds.add(collectionId);
+    }
+
     // Optimistic update
-    setMemberIds((prev) => {
-      const next = new Set(prev);
-      if (isMember) {
-        next.delete(collectionId);
-      } else {
-        next.add(collectionId);
-      }
-      onCollectionChange?.(next.size > 0);
-      return next;
-    });
+    setMemberIds(nextIds);
+    // Notify parent outside of state updater — safe here
+    onCollectionChangeRef.current?.(nextIds.size > 0);
 
     try {
       if (isMember) {
@@ -95,16 +105,8 @@ export function CollectionsPanel({ storeId, productId, disabled, onCollectionCha
       }
     } catch {
       // Revert on failure
-      setMemberIds((prev) => {
-        const next = new Set(prev);
-        if (isMember) {
-          next.add(collectionId);
-        } else {
-          next.delete(collectionId);
-        }
-        onCollectionChange?.(next.size > 0);
-        return next;
-      });
+      setMemberIds(memberIds);
+      onCollectionChangeRef.current?.(memberIds.size > 0);
       setError('Failed to update collection — please try again');
     }
   }
@@ -118,14 +120,14 @@ export function CollectionsPanel({ storeId, productId, disabled, onCollectionCha
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 py-1">
-        <div
-          className="w-4 h-4 rounded-full border-2 animate-spin shrink-0"
-          style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }}
-        />
-        <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-          Loading collections…
-        </span>
+      <div className="space-y-2">
+        {[1, 2, 3].map((i) => (
+          <div
+            key={i}
+            className="h-14 rounded-lg animate-pulse"
+            style={{ background: 'var(--bg-elevated)' }}
+          />
+        ))}
       </div>
     );
   }
@@ -154,22 +156,24 @@ export function CollectionsPanel({ storeId, productId, disabled, onCollectionCha
       <div className="space-y-2">
         {allCollections.map((collection) => {
           const checked = memberIds.has(collection.id);
+          const pending = isTogglePending(collection.id);
           const desc = getCollectionDescription(collection);
+
           return (
             <button
               key={collection.id}
               type="button"
               onClick={() => handleToggle(collection.id)}
-              disabled={disabled || isPending}
+              disabled={disabled || pending}
               className="w-full flex items-start gap-3 px-3 py-2.5 rounded-lg text-left transition-all duration-150"
               style={{
                 background: checked ? 'var(--accent-dim)' : 'var(--bg-elevated)',
                 border: checked ? '1px solid rgba(88,81,234,0.3)' : '1px solid transparent',
-                opacity: disabled || isPending ? 0.6 : 1,
-                cursor: disabled || isPending ? 'not-allowed' : 'pointer',
+                opacity: disabled || pending ? 0.6 : 1,
+                cursor: disabled || pending ? 'not-allowed' : 'pointer',
               }}
             >
-              {/* Checkbox */}
+              {/* Checkbox or spinner */}
               <div
                 className="mt-0.5 w-4 h-4 rounded flex items-center justify-center shrink-0 transition-all duration-150"
                 style={{
@@ -177,7 +181,15 @@ export function CollectionsPanel({ storeId, productId, disabled, onCollectionCha
                   border: checked ? '1px solid var(--accent)' : '1px solid var(--bg-border)',
                 }}
               >
-                {checked && (
+                {pending ? (
+                  <div
+                    className="w-2.5 h-2.5 rounded-full border border-t-transparent animate-spin"
+                    style={{
+                      borderColor: checked ? 'white' : 'var(--accent)',
+                      borderTopColor: 'transparent',
+                    }}
+                  />
+                ) : checked ? (
                   <svg className="w-2.5 h-2.5" viewBox="0 0 10 8" fill="none">
                     <path
                       d="M1 4L3.5 6.5L9 1"
@@ -187,7 +199,7 @@ export function CollectionsPanel({ storeId, productId, disabled, onCollectionCha
                       strokeLinejoin="round"
                     />
                   </svg>
-                )}
+                ) : null}
               </div>
 
               {/* Label + description */}
@@ -230,7 +242,6 @@ export function CollectionsPanel({ storeId, productId, disabled, onCollectionCha
                 type="button"
                 size="sm"
                 onClick={handleAddToFeatured}
-                disabled={isPending}
                 className="text-xs h-7 px-2.5"
               >
                 Add to Featured
@@ -261,8 +272,8 @@ export function CollectionsPanel({ storeId, productId, disabled, onCollectionCha
           style={{ color: 'var(--text-tertiary)' }}
         />
         <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-          Tick &ldquo;Featured&rdquo; to show this product on your homepage immediately. Changes
-          save automatically — no need to click Save changes.
+          Tick &ldquo;Featured&rdquo; to show this product on your homepage. Changes save
+          automatically.
         </p>
       </div>
     </div>

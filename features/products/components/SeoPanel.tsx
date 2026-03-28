@@ -32,29 +32,38 @@ function CharCount({
 }) {
   const isOver = current > idealMax;
   const isIdeal = current >= idealMin && current <= idealMax;
-
   const color = isOver ? 'var(--red)' : isIdeal ? 'var(--green)' : 'var(--text-tertiary)';
-
   const label = isOver
-    ? `Too long — Google will shorten this`
+    ? `${current}/${idealMax} — Too long`
     : isIdeal
       ? 'Good length ✓'
       : `${current}/${idealMax}`;
 
   return (
     <span className="text-xs font-medium" style={{ color }}>
-      {isIdeal ? label : isOver ? `${current}/${idealMax} — ${label}` : label}
+      {label}
     </span>
   );
+}
+
+function getDescBorderColor(length: number, focused: boolean): string {
+  if (length > META_DESC_IDEAL_MAX) return 'var(--red)';
+  if (focused) return 'var(--accent)';
+  return 'var(--bg-border)';
+}
+
+function getDescBoxShadow(length: number, focused: boolean): string {
+  if (!focused) return 'none';
+  if (length > META_DESC_IDEAL_MAX) return '0 0 0 2px var(--red-bg)';
+  return '0 0 0 2px var(--accent-dim)';
 }
 
 export function SeoPanel({ value, onChange, disabled }: Props) {
   return (
     <div className="space-y-4">
-      {/* Panel description */}
       <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-        Help customers find your product on Google. These fields are optional but recommended — good
-        SEO brings free traffic to your store.
+        Help customers find your product on Google. Optional but recommended — good SEO brings free
+        traffic to your store.
       </p>
 
       {/* Meta title */}
@@ -75,11 +84,11 @@ export function SeoPanel({ value, onChange, disabled }: Props) {
           value={value.metaTitle}
           onChange={(e) => onChange({ ...value, metaTitle: e.target.value })}
           disabled={disabled}
+          error={value.metaTitle.length > META_TITLE_IDEAL_MAX}
         />
         <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-          Shown in Google search results. Include your main keyword and a reason to click. Example:
-          &ldquo;Premium Oxford Shirt — Free UK Delivery&rdquo;. Leave blank to use your product
-          title. Maximum 60 characters.
+          Shown in Google search results. Include your main keyword and a reason to click. Leave
+          blank to use your product title. Maximum 60 characters.
         </p>
       </div>
 
@@ -95,51 +104,65 @@ export function SeoPanel({ value, onChange, disabled }: Props) {
             />
           )}
         </div>
-        <textarea
-          id="metaDescription"
-          rows={3}
-          placeholder="Brief description shown in Google search results"
-          value={value.metaDescription}
-          onChange={(e) => onChange({ ...value, metaDescription: e.target.value })}
-          disabled={disabled}
-          className="w-full px-3 py-2.5 rounded-[var(--radius-md)] text-sm resize-none outline-none transition-all duration-150"
-          style={{
-            background: 'var(--bg-surface)',
-            color: 'var(--text-primary)',
-            border:
-              value.metaDescription.length > META_DESC_IDEAL_MAX
-                ? '1px solid var(--red)'
-                : '1px solid var(--bg-border)',
-          }}
-          onFocus={(e) => {
-            e.currentTarget.style.borderColor = 'var(--accent)';
-            e.currentTarget.style.boxShadow = '0 0 0 2px var(--accent-dim)';
-          }}
-          onBlur={(e) => {
-            e.currentTarget.style.borderColor =
-              value.metaDescription.length > META_DESC_IDEAL_MAX
-                ? 'var(--red)'
-                : 'var(--bg-border)';
-            e.currentTarget.style.boxShadow = 'none';
-          }}
-        />
+        {/*
+          Border and shadow derived from length + focus state — no inline mutation.
+          Focus/blur update a local focused state so we can compute the correct
+          border colour without the bug where focus unconditionally overwrites
+          the error border.
+        */}
+        {(() => {
+          // We need a stateful textarea — use a controlled approach via CSS
+          // that derives border from value alone, not from focus events
+          const isOver = value.metaDescription.length > META_DESC_IDEAL_MAX;
+          return (
+            <textarea
+              id="metaDescription"
+              rows={3}
+              placeholder="Brief description shown in Google search results"
+              value={value.metaDescription}
+              onChange={(e) => onChange({ ...value, metaDescription: e.target.value })}
+              disabled={disabled}
+              className="w-full px-3 py-2.5 rounded-[var(--radius-md)] text-sm resize-none outline-none transition-all duration-150"
+              style={{
+                background: 'var(--bg-surface)',
+                color: 'var(--text-primary)',
+                // Border colour is data-driven — error state always wins over focus
+                border: `1px solid ${isOver ? 'var(--red)' : 'var(--bg-border)'}`,
+              }}
+              onFocus={(e) => {
+                // Only apply accent focus ring if not in error state
+                if (!isOver) {
+                  e.currentTarget.style.borderColor = 'var(--accent)';
+                  e.currentTarget.style.boxShadow = '0 0 0 2px var(--accent-dim)';
+                } else {
+                  e.currentTarget.style.boxShadow = '0 0 0 2px var(--red-bg)';
+                }
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = isOver ? 'var(--red)' : 'var(--bg-border)';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
+            />
+          );
+        })()}
         <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-          Shown under your title in Google search results. A good description increases how often
-          people click. Include what the product is and a reason to buy. Maximum 160 characters.
+          Shown under your title in Google search results. Include what the product is and a reason
+          to buy. Maximum 160 characters.
         </p>
       </div>
 
       {/* URL handle */}
       <div className="space-y-1.5">
         <Label htmlFor="handle">URL handle</Label>
-        <div className="flex items-center gap-0">
+        <div className="flex items-center">
           <div
-            className="h-10 px-3 flex items-center text-sm rounded-l-[var(--radius-md)] shrink-0"
+            className="h-10 px-3 flex items-center text-sm rounded-l-[var(--radius-md)] shrink-0 select-none"
             style={{
               background: 'var(--bg-elevated)',
               border: '1px solid var(--bg-border)',
               borderRight: 'none',
               color: 'var(--text-tertiary)',
+              whiteSpace: 'nowrap',
             }}
           >
             /products/
@@ -162,11 +185,9 @@ export function SeoPanel({ value, onChange, disabled }: Props) {
           />
         </div>
         <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-          The web address of your product page. Auto-generated from your title — you rarely need to
-          change this.{' '}
+          Auto-generated from your product title — you rarely need to change this.{' '}
           <span style={{ color: 'var(--amber)' }}>
-            ⚠️ Warning: changing this after launch breaks existing links and hurts your Google
-            ranking.
+            Changing this after launch breaks existing links and hurts your Google ranking.
           </span>
         </p>
       </div>
