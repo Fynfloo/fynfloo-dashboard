@@ -23,8 +23,37 @@ export async function loginAsMerchant(page: Page) {
   await page.goto('/login');
   await page.getByLabel(/email/i).fill(TEST_CREDENTIALS.email);
   await page.getByLabel(/password/i).fill(TEST_CREDENTIALS.password);
-  await page.getByRole('button', { name: /sign in/i }).click();
+  // Button text is 'Continue' not 'Sign in'
+  await page.getByRole('button', { name: 'Continue' }).click();
   await page.waitForURL(/\/dashboard/, { timeout: 10000 });
+}
+
+/**
+ * Navigates to the product edit page and waits for it to load.
+ */
+export async function goToProductEdit(page: Page, storeId: string, productId: string) {
+  await page.goto(`/dashboard/${storeId}/products/${productId}`);
+  // Wait for skeleton to disappear — form title appears
+  await page
+    .waitForSelector('h1:not(:text("Edit product"))', { timeout: 10000 })
+    .catch(() => page.waitForSelector('form', { timeout: 10000 }));
+}
+
+// Module-level cache — valid for the lifetime of one worker process (workers: 1).
+let _cachedToken: string | null = null;
+
+async function getApiToken(page: Page): Promise<string> {
+  if (_cachedToken) return _cachedToken;
+
+  const loginRes = await page.request.post(`${API_URL}/auth/login`, {
+    data: {
+      email: TEST_CREDENTIALS.email,
+      password: TEST_CREDENTIALS.password,
+    },
+  });
+  const body = await loginRes.json();
+  _cachedToken = body.accessToken ?? '';
+  return _cachedToken as string;
 }
 
 /**
@@ -40,11 +69,7 @@ export async function createTestProduct(
     price: number;
   }> = {},
 ): Promise<string> {
-  // Get access token from the page's memory (set by auth store)
-  const accessToken = await page.evaluate((): string => {
-    // Access the in-memory token via the api module
-    return (window as Window & { __fynfloo_test_token?: string }).__fynfloo_test_token ?? '';
-  });
+  const accessToken = await getApiToken(page);
 
   const res = await page.request.post(`${API_URL}/api/tenant/${storeId}/products`, {
     headers: {
@@ -65,23 +90,14 @@ export async function createTestProduct(
 /**
  * Deletes a test product via the API directly (cleanup).
  */
-export async function deleteTestProduct(page: Page, storeId: string, productId: string) {
-  const accessToken = await page.evaluate((): string => {
-    return (window as Window & { __fynfloo_test_token?: string }).__fynfloo_test_token ?? '';
-  });
+export async function deleteTestProduct(
+  page: Page,
+  storeId: string,
+  productId: string,
+): Promise<void> {
+  const accessToken = await getApiToken(page);
 
   await page.request.delete(`${API_URL}/api/tenant/${storeId}/products/${productId}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-}
-
-/**
- * Navigates to the product edit page and waits for it to load.
- */
-export async function goToProductEdit(page: Page, storeId: string, productId: string) {
-  await page.goto(`/dashboard/${storeId}/products/${productId}`);
-  // Wait for skeleton to disappear — form title appears
-  await page
-    .waitForSelector('h1:not(:text("Edit product"))', { timeout: 10000 })
-    .catch(() => page.waitForSelector('form', { timeout: 10000 }));
 }
