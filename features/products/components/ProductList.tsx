@@ -9,169 +9,10 @@ import { Badge } from '@/components/ui/badge';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DropdownMenu } from '@/components/ui/dropdown-menu';
 import { Modal } from '@/components/ui/modal';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { useProducts } from '@/features/products/hooks/useProducts';
 import { formatCurrency, formatRelativeTime } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
 import type { ProductListItem, ProductStatus } from '@/lib/types';
-import Image from 'next/image';
-
-// ─── Quick Create Modal ───────────────────────────────────────────────────────
-
-function QuickCreateModal({
-  open,
-  onClose,
-  storeId,
-  onCreated,
-}: {
-  open: boolean;
-  onClose: () => void;
-  storeId: string;
-  onCreated: (productId: string) => void;
-}) {
-  // Own hook instance — isolated from list
-  const { createProduct } = useProducts(storeId);
-  const [title, setTitle] = useState('');
-  const [status, setStatus] = useState<ProductStatus>('DRAFT');
-  const [isPending, setIsPending] = useState(false);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    if (!open) {
-      setTitle('');
-      setStatus('DRAFT');
-      setError('');
-    }
-  }, [open]);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const trimmed = title.trim();
-    if (!trimmed) {
-      setError('Product name is required');
-      return;
-    }
-    setIsPending(true);
-    setError('');
-    try {
-      const product = await createProduct({ title: trimmed, status });
-      onCreated(product.id);
-    } catch (err: unknown) {
-      const e = err as { message?: string };
-      setError(e?.message ?? 'Failed to create product — please try again');
-    } finally {
-      setIsPending(false);
-    }
-  }
-
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title="Add a new product"
-      description="Start with the basics — you can add images, pricing and more after saving."
-    >
-      <form onSubmit={handleSubmit} className="space-y-5">
-        <div className="space-y-1.5">
-          <Label htmlFor="quick-title">Product name *</Label>
-          <Input
-            id="quick-title"
-            value={title}
-            onChange={(e) => {
-              setTitle(e.target.value);
-              if (error) setError('');
-            }}
-            placeholder="e.g. Blue Oxford Shirt"
-            error={!!error}
-            autoFocus
-          />
-          {error ? (
-            <p className="text-xs" style={{ color: 'var(--red)' }}>
-              {error}
-            </p>
-          ) : (
-            <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-              This is what customers see on your storefront and in their orders
-            </p>
-          )}
-        </div>
-
-        <div className="space-y-2">
-          <Label>Visibility</Label>
-          <div className="space-y-2">
-            {(
-              [
-                {
-                  value: 'DRAFT' as ProductStatus,
-                  label: 'Draft',
-                  desc: 'Save privately — not visible to customers yet.',
-                },
-                {
-                  value: 'ACTIVE' as ProductStatus,
-                  label: 'Active',
-                  desc: 'Publish immediately — visible on your storefront.',
-                },
-              ] as const
-            ).map((opt) => {
-              const selected = status === opt.value;
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => setStatus(opt.value)}
-                  className="w-full flex items-start gap-3 px-3.5 py-3 rounded-xl text-left transition-all duration-150"
-                  style={{
-                    background: selected ? 'var(--accent-dim)' : 'var(--bg-elevated)',
-                    border: selected
-                      ? '1px solid rgba(88,81,234,0.3)'
-                      : '1px solid var(--bg-border-subtle)',
-                  }}
-                >
-                  <div
-                    className="mt-0.5 w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center transition-all"
-                    style={{
-                      borderColor: selected ? 'var(--accent)' : 'var(--bg-border)',
-                      background: selected ? 'var(--accent)' : 'transparent',
-                    }}
-                  >
-                    {selected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                  </div>
-                  <div>
-                    <p
-                      className="text-sm font-medium"
-                      style={{ color: selected ? 'var(--accent)' : 'var(--text-primary)' }}
-                    >
-                      {opt.label}
-                    </p>
-                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
-                      {opt.desc}
-                    </p>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="flex gap-2 pt-1">
-          <Button
-            type="button"
-            variant="secondary"
-            className="flex-1"
-            onClick={onClose}
-            disabled={isPending}
-          >
-            Cancel
-          </Button>
-          <Button type="submit" className="flex-1" loading={isPending} disabled={isPending}>
-            Create product
-          </Button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
 
 // ─── Delete modal ─────────────────────────────────────────────────────────────
 
@@ -298,7 +139,6 @@ function TableSkeleton() {
       className="rounded-xl overflow-hidden"
       style={{ border: '1px solid var(--bg-border-subtle)', background: 'var(--bg-surface)' }}
     >
-      {/* Header */}
       <div
         className="grid px-4 py-3"
         style={{
@@ -316,7 +156,6 @@ function TableSkeleton() {
           </div>
         ))}
       </div>
-      {/* Rows */}
       {Array.from({ length: 5 }).map((_, i) => (
         <div
           key={i}
@@ -328,7 +167,6 @@ function TableSkeleton() {
             gap: '16px',
           }}
         >
-          {/* Product cell */}
           <div className="flex items-center gap-3">
             <div
               className="w-10 h-10 rounded-lg shrink-0"
@@ -345,7 +183,6 @@ function TableSkeleton() {
               />
             </div>
           </div>
-          {/* Other cells */}
           {[70, 60, 50, 80].map((w, j) => (
             <div
               key={j}
@@ -379,7 +216,6 @@ export function ProductList() {
   const stores = useAuthStore((s) => s.stores);
   const currentStore = stores.find((s) => s.id === storeId);
   const currency = currentStore?.currency ?? 'GBP';
-  // subdomain is typed as string on Store — guard against empty string
   const storeSubdomain = currentStore?.subdomain || null;
 
   const { listProducts, deleteProduct } = useProducts(storeId);
@@ -392,11 +228,9 @@ export function ProductList() {
   const [error, setError] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<ProductListItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [showCreateModal, setShowCreateModal] = useState(false);
 
   const LIMIT = 20;
 
-  // listProducts is stable per storeId — safe in deps
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -415,8 +249,6 @@ export function ProductList() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId, page, statusFilter]);
-  // Note: listProducts intentionally omitted — it recreates with storeId
-  // which IS in deps. Adding it would require useCallback in the hook.
 
   useEffect(() => {
     load();
@@ -436,9 +268,9 @@ export function ProductList() {
     }
   }
 
-  function handleProductCreated(productId: string) {
-    setShowCreateModal(false);
-    router.push(`/dashboard/${storeId}/products/${productId}`);
+  // Navigate to the new product page — no modal
+  function handleAddProduct() {
+    router.push(`/dashboard/${storeId}/products/new`);
   }
 
   const totalPages = Math.ceil(total / LIMIT);
@@ -454,18 +286,11 @@ export function ProductList() {
         />
       )}
 
-      <QuickCreateModal
-        open={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        storeId={storeId}
-        onCreated={handleProductCreated}
-      />
-
       <PageHeader
         title="Products"
         description={total > 0 ? `${total} product${total !== 1 ? 's' : ''}` : undefined}
         actions={
-          <Button size="sm" onClick={() => setShowCreateModal(true)}>
+          <Button size="sm" onClick={handleAddProduct}>
             <Plus className="h-4 w-4 mr-1.5" />
             Add product
           </Button>
@@ -499,7 +324,6 @@ export function ProductList() {
         })}
       </div>
 
-      {/* Error */}
       {error && (
         <div
           className="mb-4 px-4 py-3 rounded-lg text-sm"
@@ -513,15 +337,10 @@ export function ProductList() {
         </div>
       )}
 
-      {/* Skeleton loading */}
       {loading && <TableSkeleton />}
 
-      {/* Empty state */}
-      {!loading && products.length === 0 && !error && (
-        <EmptyState onAdd={() => setShowCreateModal(true)} />
-      )}
+      {!loading && products.length === 0 && !error && <EmptyState onAdd={handleAddProduct} />}
 
-      {/* Table */}
       {!loading && products.length > 0 && (
         <div
           className="rounded-xl overflow-hidden"
@@ -531,12 +350,12 @@ export function ProductList() {
             <thead>
               <tr style={{ borderBottom: '1px solid var(--bg-border-subtle)' }}>
                 {[
-                  { label: 'Product', width: 'w-auto' },
-                  { label: 'Status', width: 'w-24' },
-                  { label: 'Price', width: 'w-28' },
-                  { label: 'Stock', width: 'w-28' },
-                  { label: 'Updated', width: 'w-28' },
-                  { label: '', width: 'w-10' },
+                  { label: 'Product' },
+                  { label: 'Status' },
+                  { label: 'Price' },
+                  { label: 'Stock' },
+                  { label: 'Updated' },
+                  { label: '' },
                 ].map(({ label }) => (
                   <th
                     key={label}
@@ -570,7 +389,6 @@ export function ProductList() {
                   }}
                   onClick={() => router.push(`/dashboard/${storeId}/products/${product.id}`)}
                 >
-                  {/* Product — stop propagation only on the actions cell */}
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
                       {product.images[0] ? (
@@ -585,8 +403,6 @@ export function ProductList() {
                           />
                         </div>
                       ) : (
-                        // Stop propagation so clicking the placeholder navigates to edit
-                        // but doesn't double-fire the row click
                         <span onClick={(e) => e.stopPropagation()}>
                           <ImagePlaceholder
                             onClick={() =>
@@ -647,7 +463,6 @@ export function ProductList() {
                     </span>
                   </td>
 
-                  {/* Actions — stop propagation so row click doesn't fire */}
                   <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                     <DropdownMenu
                       align="right"
@@ -678,7 +493,6 @@ export function ProductList() {
                         {
                           label: 'View on storefront',
                           icon: <Eye className="h-3.5 w-3.5" />,
-                          // Disabled with clear reason if no subdomain
                           disabled: !storeSubdomain,
                           onClick: () => {
                             if (storeSubdomain) {
@@ -704,7 +518,6 @@ export function ProductList() {
             </tbody>
           </table>
 
-          {/* Pagination */}
           {totalPages > 1 && (
             <div
               className="flex items-center justify-between px-4 py-3"

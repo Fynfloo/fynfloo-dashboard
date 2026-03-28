@@ -17,7 +17,7 @@ import { ImageUpload } from './ImageUpload';
 import { InventoryPanel } from './InventoryPanel';
 import { SeoPanel } from './SeoPanel';
 import { CollectionsPanel } from './CollectionsPanel';
-import { useProduct, useProductImages, useInventory } from '../hooks/useProducts';
+import { useProduct, useProducts, useProductImages, useInventory } from '../hooks/useProducts';
 import {
   formatCurrency,
   formatRelativeTime,
@@ -176,11 +176,14 @@ function FormSkeleton() {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function ProductForm({ mode }: { mode: 'edit' }) {
+type Props = { mode: 'create' } | { mode: 'edit' };
+
+export function ProductForm({ mode }: Props) {
   const router = useRouter();
   const params = useParams();
   const storeId = params.storeId as string;
-  const productId = params.id as string;
+  // productId is only present in edit mode
+  const productId = mode === 'edit' ? (params.id as string) : '';
 
   const stores = useAuthStore((s) => s.stores);
   const store = stores.find((s) => s.id === storeId);
@@ -189,6 +192,8 @@ export function ProductForm({ mode }: { mode: 'edit' }) {
 
   const setGlobalDirty = useProductStore((s) => s.setDirty);
 
+  // Hooks — create uses useProducts, edit uses useProduct
+  const { createProduct } = useProducts(storeId);
   const { updateProduct, isPending: isUpdating } = useProduct(storeId, productId);
   const {
     uploadImage,
@@ -215,7 +220,8 @@ export function ProductForm({ mode }: { mode: 'edit' }) {
 
   // ─── UI state ─────────────────────────────────────────────────────────────
 
-  const [loading, setLoading] = useState(true);
+  // In create mode we never fetch so loading starts false
+  const [loading, setLoading] = useState(mode === 'edit');
   const [error, setError] = useState('');
   const [isDirty, setIsDirty] = useState(false);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
@@ -227,39 +233,40 @@ export function ProductForm({ mode }: { mode: 'edit' }) {
 
   // ─── Refs ─────────────────────────────────────────────────────────────────
 
-  // Prevents dirty tracking from firing during form.reset() on load.
-  // Reset to false whenever storeId/productId changes so a new load
-  // doesn't inherit the previous product's loaded state.
   const loadedRef = useRef(false);
-
-  // Shadow ref for status — onSubmit reads this synchronously to avoid
-  // stale closure capturing the pre-setState value in React 18 batching.
   const statusRef = useRef<ProductStatus>('DRAFT');
+  const isBrowserBackRef = useRef(false);
+  const isDirtyRef = useRef(false);
 
   const form = useForm<Fields>({
     resolver: zodResolver(schema) as Resolver<Fields>,
     defaultValues: { title: '', description: '', sku: '', taxable: true, weight: '' },
   });
 
-  // ─── Sync isDirty to global store ────────────────────────────────────────
+  // ─── Sync isDirty to global store + ref ──────────────────────────────────
+
+  isDirtyRef.current = isDirty;
 
   useEffect(() => {
     setGlobalDirty(isDirty);
     return () => setGlobalDirty(false);
   }, [isDirty, setGlobalDirty]);
 
-  // ─── Load product ─────────────────────────────────────────────────────────
+  // ─── Load product (edit mode only) ───────────────────────────────────────
 
   useEffect(() => {
-    // Reset loaded flag when product changes so dirty tracking doesn't
-    // fire during the new product's form.reset()
+    if (mode !== 'edit') {
+      // Create mode — mark as loaded immediately so dirty tracking works
+      loadedRef.current = true;
+      return;
+    }
+
     loadedRef.current = false;
     let cancelled = false;
 
     async function load() {
       setLoading(true);
       setError('');
-      // Reset dirty state for new product
       setIsDirty(false);
 
       try {
@@ -291,20 +298,15 @@ export function ProductForm({ mode }: { mode: 'edit' }) {
     return () => {
       cancelled = true;
     };
-  }, [storeId, productId]);
+  }, [storeId, productId, mode]);
 
   // ─── Apply product data to all state ─────────────────────────────────────
-  // Single function used on both initial load and after save to keep
-  // all local state in sync with the server response.
 
   function applyProductToState(p: Product) {
     setProduct(p);
     setImages(p.images ?? []);
-
-    // Status — update both state and ref atomically
     setStatus(p.status);
     statusRef.current = p.status;
-
     setPriceDisplay(formatPriceInput(p.price));
     setCompareDisplay(formatPriceInput(p.compareAtPrice ?? 0));
     setLastSaved(p.updatedAt ?? null);
@@ -336,7 +338,7 @@ export function ProductForm({ mode }: { mode: 'edit' }) {
     });
   }
 
-  // ─── Dirty tracking — only after load completes ───────────────────────────
+  // ─── Dirty tracking ───────────────────────────────────────────────────────
 
   useEffect(() => {
     const sub = form.watch(() => {
@@ -344,6 +346,26 @@ export function ProductForm({ mode }: { mode: 'edit' }) {
     });
     return () => sub.unsubscribe();
   }, [form]);
+
+  // ─── Browser navigation warning (back/forward) ─────────────────────────────
+
+  useEffect(() => {
+    function handlePopState() {
+      if (!isDirtyRef.current) return;
+      window.history.pushState(null, '', window.location.href);
+      isBrowserBackRef.current = true;
+      setPendingNavTarget(`/dashboard/${storeId}/products`);
+      setShowNavWarning(true);
+    }
+
+    // Push a state entry so we can detect the back button
+    window.history.pushState(null, '', window.location.href);
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [storeId]);
 
   // ─── Browser unload warning ───────────────────────────────────────────────
 
@@ -385,17 +407,14 @@ export function ProductForm({ mode }: { mode: 'edit' }) {
     }
   }
 
-  // ─── Status change ────────────────────────────────────────────────────────
-
   function handleStatusChange(newStatus: ProductStatus) {
     if (newStatus === statusRef.current) return;
-    // Update ref synchronously — onSubmit reads this, not the state value
     statusRef.current = newStatus;
     setStatus(newStatus);
     markDirty();
   }
 
-  // ─── Image handlers ───────────────────────────────────────────────────────
+  // ─── Image handlers (edit mode only — product must exist) ─────────────────
 
   async function handleImageUpload(file: File) {
     const image = await uploadImage(file);
@@ -423,35 +442,41 @@ export function ProductForm({ mode }: { mode: 'edit' }) {
   }
 
   // ─── Save ─────────────────────────────────────────────────────────────────
-  // Reads statusRef.current — always the latest value, never stale.
-  // After save, applyProductToState syncs ALL local state from the
-  // server response — prices, handle, status, images, inventory.
 
   async function onSubmit(data: Fields) {
     setError('');
+
+    const payload = {
+      title: data.title,
+      description: data.description || undefined,
+      price: parsePriceInput(priceDisplay),
+      compareAtPrice: compareDisplay ? parsePriceInput(compareDisplay) : undefined,
+      sku: data.sku || undefined,
+      taxable: data.taxable ?? true,
+      weight: data.weight ? Number(data.weight) : undefined,
+      status: statusRef.current,
+      metaTitle: seo.metaTitle || undefined,
+      metaDescription: seo.metaDescription || undefined,
+      handle: seo.handle || undefined,
+    };
+
     try {
-      const payload = {
-        title: data.title,
-        description: data.description || undefined,
-        price: parsePriceInput(priceDisplay),
-        compareAtPrice: compareDisplay ? parsePriceInput(compareDisplay) : undefined,
-        sku: data.sku || undefined,
-        taxable: data.taxable ?? true,
-        weight: data.weight ? Number(data.weight) : undefined,
-        // Read from ref — guaranteed to be the latest value regardless of
-        // React 18 batching timing between setStatus and form.handleSubmit
-        status: statusRef.current,
-        metaTitle: seo.metaTitle || undefined,
-        metaDescription: seo.metaDescription || undefined,
-        handle: seo.handle || undefined,
-      };
+      if (mode === 'create') {
+        // ── Create mode ────────────────────────────────────────────────────
+        // POST → get new product ID → replace URL to edit page seamlessly
+        const created = await createProduct(payload);
+        setIsDirty(false);
+        addToast('Product created');
 
-      const [updated] = await Promise.all([updateProduct(payload), updateInventory(inventory)]);
-
-      // Sync ALL local state from server response — prevents stale UI
-      applyProductToState(updated);
-      setIsDirty(false);
-      addToast('Changes saved');
+        // Replace so back button goes to list, not back to the blank create form
+        router.replace(`/dashboard/${storeId}/products/${created.id}`);
+      } else {
+        // ── Edit mode ──────────────────────────────────────────────────────
+        const [updated] = await Promise.all([updateProduct(payload), updateInventory(inventory)]);
+        applyProductToState(updated);
+        setIsDirty(false);
+        addToast('Changes saved');
+      }
     } catch (err: unknown) {
       const e = err as { message?: string };
       setError(e?.message ?? 'Something went wrong — please try again');
@@ -465,14 +490,37 @@ export function ProductForm({ mode }: { mode: 'edit' }) {
 
   const priceSet = parsePriceInput(priceDisplay) > 0;
   const checklistItems: ChecklistItem[] = [
-    { label: 'Product name added', done: true, section: 'section-details' },
+    { label: 'Product name added', done: !!form.watch('title'), section: 'section-details' },
     { label: 'Set a price', done: priceSet, section: 'section-pricing' },
     { label: 'Add at least one image', done: images.length > 0, section: 'section-images' },
     { label: 'Choose a collection', done: inCollections, section: 'section-collections' },
     { label: 'Set to Active to publish', done: status === 'ACTIVE', section: 'section-status' },
   ];
 
-  const showChecklist = product !== null && checklistItems.some((item) => !item.done);
+  // Show checklist in create mode always; in edit mode only when product loaded
+  const showChecklist =
+    (mode === 'create' || product !== null) && checklistItems.some((item) => !item.done);
+
+  // ─── Page title / subtitle ────────────────────────────────────────────────
+
+  const pageTitle = mode === 'create' ? 'New product' : (product?.title ?? 'Edit product');
+  const pageSubtitle =
+    mode === 'create'
+      ? 'Fill in the details below — you can always edit later'
+      : isDirty
+        ? 'Unsaved changes'
+        : lastSaved
+          ? `Last saved ${formatRelativeTime(lastSaved)}`
+          : 'No changes';
+  const subtitleColor =
+    mode === 'create'
+      ? 'var(--text-secondary)'
+      : isDirty
+        ? 'var(--amber)'
+        : 'var(--text-secondary)';
+
+  const saveButtonLabel =
+    mode === 'create' ? 'Save product' : isPending ? 'Saving…' : 'Save changes';
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
@@ -510,7 +558,10 @@ export function ProductForm({ mode }: { mode: 'edit' }) {
               setIsDirty(false);
               setGlobalDirty(false);
               setShowNavWarning(false);
-              if (pendingNavTarget) router.push(pendingNavTarget);
+              isBrowserBackRef.current = false;
+              if (pendingNavTarget) {
+                router.push(pendingNavTarget);
+              }
             }}
           >
             Leave anyway
@@ -526,17 +577,10 @@ export function ProductForm({ mode }: { mode: 'edit' }) {
               className="text-xl font-semibold"
               style={{ color: 'var(--text-primary)', letterSpacing: '-0.02em' }}
             >
-              {product?.title ?? 'Edit product'}
+              {pageTitle}
             </h1>
-            <p
-              className="text-sm transition-colors duration-200"
-              style={{ color: isDirty ? 'var(--amber)' : 'var(--text-secondary)' }}
-            >
-              {isDirty
-                ? 'Unsaved changes'
-                : lastSaved
-                  ? `Last saved ${formatRelativeTime(lastSaved)}`
-                  : 'No changes'}
+            <p className="text-sm transition-colors duration-200" style={{ color: subtitleColor }}>
+              {pageSubtitle}
             </p>
           </div>
 
@@ -553,11 +597,11 @@ export function ProductForm({ mode }: { mode: 'edit' }) {
             <Button
               type="submit"
               size="sm"
-              variant={isDirty ? 'primary' : 'secondary'}
+              variant={mode === 'create' || isDirty ? 'primary' : 'secondary'}
               loading={isPending}
               disabled={isPending}
             >
-              {isPending ? 'Saving…' : 'Save changes'}
+              {saveButtonLabel}
             </Button>
           </div>
         </div>
@@ -637,14 +681,29 @@ export function ProductForm({ mode }: { mode: 'edit' }) {
               </div>
             </Section>
 
+            {/* Images — disabled in create mode until product is saved */}
             <Section id="section-images" title="Images">
-              <ImageUpload
-                images={images}
-                onUpload={handleImageUpload}
-                onDelete={handleImageDelete}
-                onReorder={handleImageReorder}
-                disabled={isImagePending}
-              />
+              {mode === 'create' ? (
+                <div
+                  className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-8"
+                  style={{ borderColor: 'var(--bg-border)', background: 'var(--bg-elevated)' }}
+                >
+                  <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+                    Save your product first to upload images
+                  </p>
+                  <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                    Images can be added after the product is created
+                  </p>
+                </div>
+              ) : (
+                <ImageUpload
+                  images={images}
+                  onUpload={handleImageUpload}
+                  onDelete={handleImageDelete}
+                  onReorder={handleImageReorder}
+                  disabled={isImagePending}
+                />
+              )}
             </Section>
 
             <Section id="section-pricing" title="Pricing">
@@ -815,8 +874,8 @@ export function ProductForm({ mode }: { mode: 'edit' }) {
                 ))}
               </div>
 
-              {/* Live link — only when saved and actually live */}
-              {status === 'ACTIVE' && !isDirty && storeSlug && seo.handle && (
+              {/* Live link — edit mode only, when saved and active */}
+              {mode === 'edit' && status === 'ACTIVE' && !isDirty && storeSlug && seo.handle && (
                 <a
                   href={`https://${storeSlug}.fynfloo.com/products/${seo.handle}`}
                   target="_blank"
@@ -833,9 +892,11 @@ export function ProductForm({ mode }: { mode: 'edit' }) {
                 </a>
               )}
 
-              {status === 'ACTIVE' && isDirty && (
+              {status === 'ACTIVE' && (mode === 'create' || isDirty) && (
                 <p className="text-xs mt-3" style={{ color: 'var(--amber)' }}>
-                  Save to publish these changes to your storefront
+                  {mode === 'create'
+                    ? 'Will be published immediately after saving'
+                    : 'Save to publish these changes to your storefront'}
                 </p>
               )}
 
@@ -856,19 +917,29 @@ export function ProductForm({ mode }: { mode: 'edit' }) {
               <CompletionChecklist items={checklistItems} onScrollTo={scrollToSection} />
             )}
 
+            {/* Collections — only available in edit mode (product must exist) */}
             <Section id="section-collections" title="Collections">
-              <p className="text-xs mb-3" style={{ color: 'var(--text-secondary)' }}>
-                Choose where this product appears on your storefront pages
-              </p>
-              <CollectionsPanel
-                storeId={storeId}
-                productId={productId}
-                disabled={isPending}
-                onCollectionChange={setInCollections}
-              />
+              {mode === 'create' ? (
+                <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                  Save your product first to assign it to collections
+                </p>
+              ) : (
+                <>
+                  <p className="text-xs mb-3" style={{ color: 'var(--text-secondary)' }}>
+                    Choose where this product appears on your storefront pages
+                  </p>
+                  <CollectionsPanel
+                    storeId={storeId}
+                    productId={productId}
+                    disabled={isPending}
+                    onCollectionChange={setInCollections}
+                  />
+                </>
+              )}
             </Section>
 
-            {product && (
+            {/* Summary — edit mode only */}
+            {mode === 'edit' && product && (
               <Section title="Summary">
                 <div className="space-y-2.5 text-sm">
                   <div className="flex justify-between">
