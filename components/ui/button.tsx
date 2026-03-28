@@ -22,7 +22,12 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     ];
 
     const variants: Record<ButtonVariant, string> = {
-      primary: ['text-white', 'focus-visible:ring-[var(--accent)]'].join(' '),
+      primary: [
+        'bg-[var(--accent)] text-white',
+        'hover:bg-[var(--accent-hover)] hover:-translate-y-px',
+        'hover:shadow-[var(--shadow-accent)]',
+        'focus-visible:ring-[var(--accent)]',
+      ].join(' '),
       secondary: [
         'bg-[var(--bg-elevated)] text-[var(--text-primary)]',
         'border border-[var(--bg-border-subtle)]',
@@ -52,23 +57,6 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         disabled={disabled || loading}
         className={cn(base, variants[variant], sizes[size], className)}
-        style={variant === 'primary' ? { background: 'var(--accent)' } : undefined}
-        onMouseEnter={(e) => {
-          if (variant === 'primary' && !disabled && !loading) {
-            e.currentTarget.style.background = 'var(--accent-hover)';
-            e.currentTarget.style.boxShadow = 'var(--shadow-accent)';
-            e.currentTarget.style.transform = 'translateY(-1px)';
-          }
-          props.onMouseEnter?.(e);
-        }}
-        onMouseLeave={(e) => {
-          if (variant === 'primary') {
-            e.currentTarget.style.background = 'var(--accent)';
-            e.currentTarget.style.boxShadow = 'none';
-            e.currentTarget.style.transform = 'translateY(0)';
-          }
-          props.onMouseLeave?.(e);
-        }}
         {...props}
       >
         {loading && (
