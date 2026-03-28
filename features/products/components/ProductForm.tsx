@@ -187,10 +187,8 @@ export function ProductForm({ mode }: { mode: 'edit' }) {
   const currency = store?.currency ?? 'GBP';
   const storeSlug = store?.subdomain;
 
-  // Global dirty flag — read by Sidebar for nav intercept
   const setGlobalDirty = useProductStore((s) => s.setDirty);
 
-  // Hooks — productId is always a real string in edit mode
   const { updateProduct, isPending: isUpdating } = useProduct(storeId, productId);
   const {
     uploadImage,
@@ -200,7 +198,8 @@ export function ProductForm({ mode }: { mode: 'edit' }) {
   } = useProductImages(storeId, productId);
   const { updateInventory } = useInventory(storeId, productId);
 
-  // Form state
+  // ─── Form state ───────────────────────────────────────────────────────────
+
   const [product, setProduct] = useState<Product | null>(null);
   const [images, setImages] = useState<ProductImage[]>([]);
   const [status, setStatus] = useState<ProductStatus>('DRAFT');
@@ -214,7 +213,8 @@ export function ProductForm({ mode }: { mode: 'edit' }) {
   const [priceDisplay, setPriceDisplay] = useState('');
   const [compareDisplay, setCompareDisplay] = useState('');
 
-  // UI state
+  // ─── UI state ─────────────────────────────────────────────────────────────
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isDirty, setIsDirty] = useState(false);
@@ -225,9 +225,16 @@ export function ProductForm({ mode }: { mode: 'edit' }) {
 
   const { toasts, addToast, removeToast } = useToast();
 
-  // Track whether the initial load has completed so dirty tracking
-  // doesn't fire during form.reset()
+  // ─── Refs ─────────────────────────────────────────────────────────────────
+
+  // Prevents dirty tracking from firing during form.reset() on load.
+  // Reset to false whenever storeId/productId changes so a new load
+  // doesn't inherit the previous product's loaded state.
   const loadedRef = useRef(false);
+
+  // Shadow ref for status — onSubmit reads this synchronously to avoid
+  // stale closure capturing the pre-setState value in React 18 batching.
+  const statusRef = useRef<ProductStatus>('DRAFT');
 
   const form = useForm<Fields>({
     resolver: zodResolver(schema) as Resolver<Fields>,
@@ -238,26 +245,30 @@ export function ProductForm({ mode }: { mode: 'edit' }) {
 
   useEffect(() => {
     setGlobalDirty(isDirty);
-    // Clean up on unmount so sidebar doesn't block navigation after leaving edit page
     return () => setGlobalDirty(false);
   }, [isDirty, setGlobalDirty]);
 
   // ─── Load product ─────────────────────────────────────────────────────────
-  // Note: getProduct is stable per hook instance (no useCallback needed here)
-  // because we call it inside the effect directly.
 
   useEffect(() => {
+    // Reset loaded flag when product changes so dirty tracking doesn't
+    // fire during the new product's form.reset()
+    loadedRef.current = false;
     let cancelled = false;
 
     async function load() {
       setLoading(true);
       setError('');
+      // Reset dirty state for new product
+      setIsDirty(false);
+
       try {
+        const { getAccessToken } = await import('@/lib/api');
         const res = await fetch(
           `${process.env.NEXT_PUBLIC_API_URL}/api/tenant/${storeId}/products/${productId}`,
           {
             headers: {
-              Authorization: `Bearer ${(await import('@/lib/api')).getAccessToken() ?? ''}`,
+              Authorization: `Bearer ${getAccessToken() ?? ''}`,
               Accept: 'application/json',
             },
             credentials: 'include',
@@ -267,43 +278,7 @@ export function ProductForm({ mode }: { mode: 'edit' }) {
         const p: Product = await res.json();
         if (cancelled) return;
 
-        setProduct(p);
-        setImages(p.images);
-        setStatus(p.status);
-        setPriceDisplay(formatPriceInput(p.price));
-        setCompareDisplay(formatPriceInput(p.compareAtPrice ?? 0));
-        setLastSaved(p.updatedAt ?? null);
-
-        if (p.inventory) {
-          setInventory({
-            trackQuantity: p.inventory.trackQuantity,
-            onHand: p.inventory.onHand,
-            lowStockThreshold: p.inventory.lowStockThreshold,
-            allowOversell: p.inventory.allowOversell,
-          });
-        }
-
-        // Safe metadata access — no unsafe cast
-        setSeo({
-          metaTitle:
-            p.metadata && typeof p.metadata.metaTitle === 'string' ? p.metadata.metaTitle : '',
-          metaDescription:
-            p.metadata && typeof p.metadata.metaDescription === 'string'
-              ? p.metadata.metaDescription
-              : '',
-          handle: p.handle,
-        });
-
-        // Reset form BEFORE enabling dirty tracking
-        form.reset({
-          title: p.title,
-          description: p.description ?? '',
-          sku: p.sku ?? '',
-          taxable: p.taxable,
-          weight: p.weight ?? '',
-        });
-
-        // Mark load complete — dirty tracking now enabled
+        applyProductToState(p);
         loadedRef.current = true;
       } catch {
         if (!cancelled) setError('Failed to load product — please refresh the page');
@@ -316,7 +291,50 @@ export function ProductForm({ mode }: { mode: 'edit' }) {
     return () => {
       cancelled = true;
     };
-  }, [storeId, productId]); // storeId + productId are the correct deps
+  }, [storeId, productId]);
+
+  // ─── Apply product data to all state ─────────────────────────────────────
+  // Single function used on both initial load and after save to keep
+  // all local state in sync with the server response.
+
+  function applyProductToState(p: Product) {
+    setProduct(p);
+    setImages(p.images ?? []);
+
+    // Status — update both state and ref atomically
+    setStatus(p.status);
+    statusRef.current = p.status;
+
+    setPriceDisplay(formatPriceInput(p.price));
+    setCompareDisplay(formatPriceInput(p.compareAtPrice ?? 0));
+    setLastSaved(p.updatedAt ?? null);
+
+    if (p.inventory) {
+      setInventory({
+        trackQuantity: p.inventory.trackQuantity,
+        onHand: p.inventory.onHand,
+        lowStockThreshold: p.inventory.lowStockThreshold,
+        allowOversell: p.inventory.allowOversell,
+      });
+    }
+
+    setSeo({
+      metaTitle: p.metadata && typeof p.metadata.metaTitle === 'string' ? p.metadata.metaTitle : '',
+      metaDescription:
+        p.metadata && typeof p.metadata.metaDescription === 'string'
+          ? p.metadata.metaDescription
+          : '',
+      handle: p.handle,
+    });
+
+    form.reset({
+      title: p.title,
+      description: p.description ?? '',
+      sku: p.sku ?? '',
+      taxable: p.taxable,
+      weight: p.weight ?? '',
+    });
+  }
 
   // ─── Dirty tracking — only after load completes ───────────────────────────
 
@@ -368,12 +386,11 @@ export function ProductForm({ mode }: { mode: 'edit' }) {
   }
 
   // ─── Status change ────────────────────────────────────────────────────────
-  // No confirmation modal — status is just a field.
-  // The product is not published until Save is clicked.
-  // The "Live" link appears after save when status === ACTIVE.
 
   function handleStatusChange(newStatus: ProductStatus) {
-    if (newStatus === status) return;
+    if (newStatus === statusRef.current) return;
+    // Update ref synchronously — onSubmit reads this, not the state value
+    statusRef.current = newStatus;
     setStatus(newStatus);
     markDirty();
   }
@@ -393,24 +410,22 @@ export function ProductForm({ mode }: { mode: 'edit' }) {
   }
 
   async function handleImageReorder(reordered: { id: string; position: number }[]) {
-    // Optimistically reorder locally
     const sorted = [...reordered].sort((a, b) => a.position - b.position);
     const prevImages = images;
     const map = new Map(images.map((img) => [img.id, img]));
     setImages(sorted.map((r) => ({ ...map.get(r.id)!, position: r.position })));
-
     try {
       await reorderImages(reordered);
     } catch {
-      // Revert to previous order on failure
       setImages(prevImages);
       addToast('Failed to reorder images', 'error');
     }
   }
 
   // ─── Save ─────────────────────────────────────────────────────────────────
-  // product update and inventory update fire in parallel.
-  // Both must succeed for the UI to show "saved".
+  // Reads statusRef.current — always the latest value, never stale.
+  // After save, applyProductToState syncs ALL local state from the
+  // server response — prices, handle, status, images, inventory.
 
   async function onSubmit(data: Fields) {
     setError('');
@@ -423,19 +438,19 @@ export function ProductForm({ mode }: { mode: 'edit' }) {
         sku: data.sku || undefined,
         taxable: data.taxable ?? true,
         weight: data.weight ? Number(data.weight) : undefined,
-        status,
+        // Read from ref — guaranteed to be the latest value regardless of
+        // React 18 batching timing between setStatus and form.handleSubmit
+        status: statusRef.current,
         metaTitle: seo.metaTitle || undefined,
         metaDescription: seo.metaDescription || undefined,
         handle: seo.handle || undefined,
       };
 
-      // Fire both in parallel — both must succeed
       const [updated] = await Promise.all([updateProduct(payload), updateInventory(inventory)]);
 
-      // Only mark clean and show success after BOTH resolve
+      // Sync ALL local state from server response — prevents stale UI
+      applyProductToState(updated);
       setIsDirty(false);
-      setLastSaved(updated.updatedAt ?? new Date().toISOString());
-      setProduct(updated);
       addToast('Changes saved');
     } catch (err: unknown) {
       const e = err as { message?: string };
@@ -457,7 +472,6 @@ export function ProductForm({ mode }: { mode: 'edit' }) {
     { label: 'Set to Active to publish', done: status === 'ACTIVE', section: 'section-status' },
   ];
 
-  // Show checklist only when product exists and at least one item is incomplete
   const showChecklist = product !== null && checklistItems.some((item) => !item.done);
 
   // ─── Render ───────────────────────────────────────────────────────────────
@@ -468,7 +482,6 @@ export function ProductForm({ mode }: { mode: 'edit' }) {
     <>
       <ToastContainer toasts={toasts} onDismiss={removeToast} />
 
-      {/* Nav intercept modal */}
       <Modal
         open={showNavWarning}
         onClose={() => {
@@ -506,10 +519,7 @@ export function ProductForm({ mode }: { mode: 'edit' }) {
       </Modal>
 
       <form onSubmit={form.handleSubmit(onSubmit)}>
-        {/* ── Header ────────────────────────────────────────────────────────
-            Unsaved state: subtitle turns amber, save button turns primary.
-            No floating banner — one signal, one place.
-        ──────────────────────────────────────────────────────────────────── */}
+        {/* Header */}
         <div className="flex items-start justify-between mb-6">
           <div className="space-y-0.5">
             <h1
@@ -552,7 +562,6 @@ export function ProductForm({ mode }: { mode: 'edit' }) {
           </div>
         </div>
 
-        {/* Error banner */}
         {error && (
           <div
             className="flex items-start gap-2.5 rounded-lg px-3.5 py-3 text-sm mb-5"
@@ -568,9 +577,8 @@ export function ProductForm({ mode }: { mode: 'edit' }) {
         )}
 
         <div className="grid grid-cols-3 gap-5">
-          {/* ── Left column ──────────────────────────────────────────── */}
+          {/* Left column */}
           <div className="col-span-2 space-y-5">
-            {/* Product details */}
             <Section id="section-details" title="Product details">
               <div className="space-y-1.5">
                 <Label htmlFor="title">Product name *</Label>
@@ -629,7 +637,6 @@ export function ProductForm({ mode }: { mode: 'edit' }) {
               </div>
             </Section>
 
-            {/* Images */}
             <Section id="section-images" title="Images">
               <ImageUpload
                 images={images}
@@ -640,7 +647,6 @@ export function ProductForm({ mode }: { mode: 'edit' }) {
               />
             </Section>
 
-            {/* Pricing */}
             <Section id="section-pricing" title="Pricing">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
@@ -697,7 +703,6 @@ export function ProductForm({ mode }: { mode: 'edit' }) {
               </div>
             </Section>
 
-            {/* Inventory */}
             <Section id="section-inventory" title="Inventory">
               <div className="space-y-1.5 mb-4">
                 <Label htmlFor="sku">SKU (Stock Keeping Unit)</Label>
@@ -717,7 +722,6 @@ export function ProductForm({ mode }: { mode: 'edit' }) {
               />
             </Section>
 
-            {/* Shipping */}
             <Section id="section-shipping" title="Shipping">
               <div className="space-y-1.5">
                 <Label htmlFor="weight">Weight (grams)</Label>
@@ -735,7 +739,6 @@ export function ProductForm({ mode }: { mode: 'edit' }) {
               </div>
             </Section>
 
-            {/* SEO */}
             <Section id="section-seo" title="Search engine optimisation">
               <SeoPanel
                 value={seo}
@@ -748,13 +751,8 @@ export function ProductForm({ mode }: { mode: 'edit' }) {
             </Section>
           </div>
 
-          {/* ── Right column ─────────────────────────────────────── */}
+          {/* Right column */}
           <div className="space-y-5">
-            {/* Status
-                No confirmation modal. Status is a field.
-                Save with status=ACTIVE publishes the product.
-                The live link appears after the product is saved as Active.
-            */}
             <Section id="section-status" title="Status">
               <div className="space-y-1.5">
                 {(
@@ -817,7 +815,7 @@ export function ProductForm({ mode }: { mode: 'edit' }) {
                 ))}
               </div>
 
-              {/* Live link — only shown after save, when product IS actually live */}
+              {/* Live link — only when saved and actually live */}
               {status === 'ACTIVE' && !isDirty && storeSlug && seo.handle && (
                 <a
                   href={`https://${storeSlug}.fynfloo.com/products/${seo.handle}`}
@@ -835,7 +833,6 @@ export function ProductForm({ mode }: { mode: 'edit' }) {
                 </a>
               )}
 
-              {/* Pending save message when Active but dirty */}
               {status === 'ACTIVE' && isDirty && (
                 <p className="text-xs mt-3" style={{ color: 'var(--amber)' }}>
                   Save to publish these changes to your storefront
@@ -847,14 +844,18 @@ export function ProductForm({ mode }: { mode: 'edit' }) {
                   Not published — set to Active and save to publish
                 </p>
               )}
+
+              {status === 'ARCHIVED' && (
+                <p className="text-xs mt-3" style={{ color: 'var(--text-tertiary)' }}>
+                  Archived — hidden from your storefront and all collections
+                </p>
+              )}
             </Section>
 
-            {/* Checklist — right below Status, order matches checklist items */}
             {showChecklist && (
               <CompletionChecklist items={checklistItems} onScrollTo={scrollToSection} />
             )}
 
-            {/* Collections */}
             <Section id="section-collections" title="Collections">
               <p className="text-xs mb-3" style={{ color: 'var(--text-secondary)' }}>
                 Choose where this product appears on your storefront pages
@@ -867,10 +868,25 @@ export function ProductForm({ mode }: { mode: 'edit' }) {
               />
             </Section>
 
-            {/* Summary */}
             {product && (
               <Section title="Summary">
                 <div className="space-y-2.5 text-sm">
+                  <div className="flex justify-between">
+                    <span style={{ color: 'var(--text-secondary)' }}>Status</span>
+                    <span
+                      className="font-medium"
+                      style={{
+                        color:
+                          status === 'ACTIVE'
+                            ? 'var(--green)'
+                            : status === 'ARCHIVED'
+                              ? 'var(--text-tertiary)'
+                              : 'var(--amber)',
+                      }}
+                    >
+                      {status.charAt(0) + status.slice(1).toLowerCase()}
+                    </span>
+                  </div>
                   <div className="flex justify-between">
                     <span style={{ color: 'var(--text-secondary)' }}>Price</span>
                     <span className="font-medium" style={{ color: 'var(--text-primary)' }}>
