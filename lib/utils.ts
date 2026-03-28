@@ -47,7 +47,10 @@ export function formatDateTime(iso: string): string {
  * e.g. 'Michael Okolo' → 'MO', 'michael@fynfloo.com' → 'M'
  */
 export function getInitials(nameOrEmail: string): string {
-  const parts = nameOrEmail.split(/[\s@]+/).filter(Boolean);
+  // For emails — use only the local part before @
+  const input = nameOrEmail.includes('@') ? nameOrEmail.split('@')[0] : nameOrEmail;
+
+  const parts = input.split(/\s+/).filter(Boolean);
   if (parts.length === 1) return parts[0][0].toUpperCase();
   return (parts[0][0] + parts[1][0]).toUpperCase();
 }
