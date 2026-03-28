@@ -97,7 +97,7 @@ export type ProductListItem = {
   publishedAt: string | null;
   createdAt: string;
   updatedAt: string;
-  image: ProductImage | null;
+  images: ProductImage[];
   inventory: ProductInventory | null;
 };
 

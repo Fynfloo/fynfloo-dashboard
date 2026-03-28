@@ -15,6 +15,7 @@ import { useProducts } from '@/features/products/hooks/useProducts';
 import { formatCurrency, formatRelativeTime } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
 import type { ProductListItem, ProductStatus } from '@/lib/types';
+import Image from 'next/image';
 
 // ─── Quick Create Modal ───────────────────────────────────────────────────────
 
@@ -572,14 +573,14 @@ export function ProductList() {
                   {/* Product — stop propagation only on the actions cell */}
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
-                      {product.image ? (
+                      {product.images[0] ? (
                         <div
                           className="w-10 h-10 rounded-lg shrink-0 overflow-hidden"
                           style={{ background: 'var(--bg-elevated)' }}
                         >
                           <img
-                            src={product.image.url}
-                            alt={product.image.alt ?? product.title}
+                            src={product.images[0].url}
+                            alt={product.images[0].alt ?? product.title}
                             className="w-full h-full object-cover"
                           />
                         </div>
