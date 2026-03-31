@@ -901,12 +901,7 @@ export function ProductForm({ mode }: Props) {
                     markDirty();
                   }}
                   disabled={isPending}
-                  label={isService ? 'Track units available' : undefined}
-                  helperText={
-                    isService
-                      ? 'Useful for hire businesses — set quantity to the number of units you own. Stock decrements by 1 on each purchase.'
-                      : undefined
-                  }
+                  productType={isService ? 'SERVICE' : 'PHYSICAL'}
                 />
               </Section>
             )}
@@ -932,7 +927,7 @@ export function ProductForm({ mode }: Props) {
             )}
 
             {/* 8. Variants — all types, edit mode only */}
-            {mode === 'edit' && (
+            {mode === 'edit' && isPhysical && (
               <Section id="section-variants" title="Variants">
                 <p className="text-xs mb-2" style={{ color: 'var(--text-secondary)' }}>
                   Add options like Size or Colour to create variants. Each variant can have its own
