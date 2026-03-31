@@ -938,6 +938,7 @@ export function ProductForm({ mode }: Props) {
                   price, SKU and stock level.
                 </p>
                 <VariantBuilder
+                  key={`variants-${options.length}-${variants.length}`}
                   storeId={storeId}
                   productId={productId}
                   options={options}
@@ -953,7 +954,12 @@ export function ProductForm({ mode }: Props) {
                     );
                   }}
                   onVariantDelete={(variantId: string) => {
-                    setVariants((prev) => prev.filter((v) => v.id !== variantId));
+                    setVariants((prev) => {
+                      const remaining = prev.filter((v) => v.id !== variantId);
+                      // Mirror backend behaviour — clear options when last variant deleted
+                      if (remaining.length === 0) setOptions([]);
+                      return remaining;
+                    });
                   }}
                   disabled={isPending}
                 />

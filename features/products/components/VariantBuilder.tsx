@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { CurrencyInput } from '@/components/ui/currency-input';
 import { useVariants } from '../hooks/useProducts';
-import { parsePriceInput, formatPriceInput, getCurrencySymbol } from '@/lib/utils';
+import { parsePriceInput, formatPriceInput } from '@/lib/utils';
 import type {
   ProductOption,
   ProductVariant,
@@ -360,10 +360,8 @@ export function VariantBuilder({
   onVariantDelete,
   disabled,
 }: Props) {
-  const { setOptions, bulkUpdatePrices, deleteVariant, updateVariant, isPending } = useVariants(
-    storeId,
-    productId,
-  );
+  const { setOptions, clearVariants, bulkUpdatePrices, deleteVariant, updateVariant, isPending } =
+    useVariants(storeId, productId);
 
   // Draft options state — edited before generating
   const [draftOptions, setDraftOptions] = useState<DraftOption[]>(() =>
@@ -393,8 +391,12 @@ export function VariantBuilder({
   }
 
   function removeOption(index: number) {
-    setDraftOptions((prev) => prev.filter((_, i) => i !== index));
+    const remaining = draftOptions.filter((_, i) => i !== index);
+    setDraftOptions(remaining);
     setOptionsDirty(true);
+    if (remaining.length === 0) {
+      handleClearAll();
+    }
   }
 
   async function handleGenerateVariants() {
@@ -425,6 +427,17 @@ export function VariantBuilder({
     } catch (err: unknown) {
       const e = err as { message?: string };
       setError(e?.message ?? 'Failed to generate variants');
+    }
+  }
+
+  async function handleClearAll() {
+    try {
+      await clearVariants();
+      onOptionsChange([], []);
+      setOptionsDirty(false);
+      setDraftOptions([]);
+    } catch {
+      setError('Failed to clear options');
     }
   }
 
