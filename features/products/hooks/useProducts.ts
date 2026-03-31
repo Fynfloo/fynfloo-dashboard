@@ -10,6 +10,12 @@ import type {
   UpdateProductInput,
   UpdateInventoryInput,
   ProductStatus,
+  ProductOption,
+  ProductVariant,
+  DigitalAsset,
+  CreateOptionInput,
+  UpdateVariantInput,
+  UpdateDigitalAssetSettingsInput,
 } from '@/lib/types';
 
 // ─── useProducts — list + create + delete ─────────────────────────────────────
@@ -177,4 +183,150 @@ export function useInventory(storeId: string, productId: string) {
   }
 
   return { updateInventory, isPending };
+}
+
+// ─── useVariants ──────────────────────────────────────────────────────────────
+
+export function useVariants(storeId: string, productId: string) {
+  const [isPending, setIsPending] = useState(false);
+
+  async function setOptions(options: CreateOptionInput[]) {
+    setIsPending(true);
+    try {
+      return await apiRequest<{ options: ProductOption[]; variants: ProductVariant[] }>(
+        `/api/tenant/${storeId}/products/${productId}/options`,
+        { method: 'PUT', body: { options } },
+      );
+    } finally {
+      setIsPending(false);
+    }
+  }
+
+  async function clearVariants() {
+    setIsPending(true);
+    try {
+      await apiRequest(`/api/tenant/${storeId}/products/${productId}/options`, {
+        method: 'DELETE',
+      });
+    } finally {
+      setIsPending(false);
+    }
+  }
+
+  async function listVariants(): Promise<{ variants: ProductVariant[] }> {
+    setIsPending(true);
+    try {
+      return await apiRequest(`/api/tenant/${storeId}/products/${productId}/variants`);
+    } finally {
+      setIsPending(false);
+    }
+  }
+
+  async function updateVariant(variantId: string, input: UpdateVariantInput) {
+    setIsPending(true);
+    try {
+      return await apiRequest<ProductVariant>(
+        `/api/tenant/${storeId}/products/${productId}/variants/${variantId}`,
+        { method: 'PATCH', body: input },
+      );
+    } finally {
+      setIsPending(false);
+    }
+  }
+
+  async function deleteVariant(variantId: string) {
+    setIsPending(true);
+    try {
+      await apiRequest(`/api/tenant/${storeId}/products/${productId}/variants/${variantId}`, {
+        method: 'DELETE',
+      });
+    } finally {
+      setIsPending(false);
+    }
+  }
+
+  async function bulkUpdatePrices(price: number) {
+    setIsPending(true);
+    try {
+      await apiRequest(`/api/tenant/${storeId}/products/${productId}/variants/bulk-price`, {
+        method: 'PATCH',
+        body: { price },
+      });
+    } finally {
+      setIsPending(false);
+    }
+  }
+
+  return {
+    setOptions,
+    clearVariants,
+    listVariants,
+    updateVariant,
+    deleteVariant,
+    bulkUpdatePrices,
+    isPending,
+  };
+}
+
+// ─── useDigitalAsset ──────────────────────────────────────────────────────────
+
+export function useDigitalAsset(storeId: string, productId: string) {
+  const [isPending, setIsPending] = useState(false);
+
+  async function uploadAsset(file: File): Promise<DigitalAsset> {
+    if (!productId) throw new Error('Product must be saved before uploading a digital asset');
+    setIsPending(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const token = getAccessToken();
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/tenant/${storeId}/products/${productId}/digital-asset`,
+        {
+          method: 'POST',
+          headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            Accept: 'application/json',
+          },
+          credentials: 'include',
+          body: formData,
+        },
+      );
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Upload failed' }));
+        throw { status: res.status, message: err.error ?? 'Upload failed' };
+      }
+
+      return res.json();
+    } finally {
+      setIsPending(false);
+    }
+  }
+
+  async function updateSettings(input: UpdateDigitalAssetSettingsInput): Promise<DigitalAsset> {
+    setIsPending(true);
+    try {
+      return await apiRequest<DigitalAsset>(
+        `/api/tenant/${storeId}/products/${productId}/digital-asset`,
+        { method: 'PATCH', body: input },
+      );
+    } finally {
+      setIsPending(false);
+    }
+  }
+
+  async function deleteAsset(): Promise<void> {
+    setIsPending(true);
+    try {
+      await apiRequest(`/api/tenant/${storeId}/products/${productId}/digital-asset`, {
+        method: 'DELETE',
+      });
+    } finally {
+      setIsPending(false);
+    }
+  }
+
+  return { uploadAsset, updateSettings, deleteAsset, isPending };
 }

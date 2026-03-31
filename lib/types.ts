@@ -48,6 +48,8 @@ export type ApiError = {
 // Product types
 export type ProductStatus = 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
 
+export type ProductType = 'PHYSICAL' | 'DIGITAL' | 'SERVICE';
+
 export type ProductImage = {
   id: string;
   url: string;
@@ -64,6 +66,37 @@ export type ProductInventory = {
   allowOversell: boolean;
 };
 
+export type ProductOption = {
+  id: string;
+  name: string;
+  values: string[];
+  position: number;
+};
+
+export type ProductVariant = {
+  id: string;
+  title: string;
+  sku: string | null;
+  price: number;
+  compareAtPrice: number | null;
+  options: Record<string, string>;
+  trackQuantity: boolean;
+  onHand: number | null;
+  lowStockThreshold: number | null;
+  allowOversell: boolean;
+  position: number;
+};
+
+export type DigitalAsset = {
+  id: string;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  maxDownloads: number;
+  expiryHours: number;
+  // storageKey is never returned — excluded by API
+};
+
 export type Product = {
   id: string;
   storeId: string;
@@ -73,6 +106,7 @@ export type Product = {
   price: number;
   compareAtPrice: number | null;
   status: ProductStatus;
+  productType: ProductType;
   sku: string | null;
   taxable: boolean;
   weight: number | null;
@@ -85,6 +119,9 @@ export type Product = {
   updatedAt: string;
   images: ProductImage[];
   inventory: ProductInventory | null;
+  options: ProductOption[];
+  variants: ProductVariant[];
+  digitalAsset: DigitalAsset | null;
 };
 
 export type ProductListItem = {
@@ -94,6 +131,7 @@ export type ProductListItem = {
   price: number;
   compareAtPrice: number | null;
   status: ProductStatus;
+  productType: ProductType;
   publishedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -114,6 +152,7 @@ export type CreateProductInput = {
   price?: number;
   compareAtPrice?: number;
   status?: ProductStatus;
+  productType?: ProductType;
   sku?: string;
   taxable?: boolean;
   weight?: number;
@@ -130,4 +169,34 @@ export type UpdateInventoryInput = {
   onHand?: number;
   lowStockThreshold?: number;
   allowOversell?: boolean;
+};
+
+// ─── Variant input types ──────────────────────────────────────────────────────
+
+export type CreateOptionInput = {
+  name: string;
+  values: string[];
+  position?: number;
+};
+
+export type UpdateVariantInput = {
+  sku?: string;
+  price?: number;
+  compareAtPrice?: number;
+  trackQuantity?: boolean;
+  onHand?: number;
+  lowStockThreshold?: number;
+  allowOversell?: boolean;
+  position?: number;
+};
+
+export type BulkUpdateVariantPriceInput = {
+  price: number;
+};
+
+// ─── Digital asset input types ────────────────────────────────────────────────
+
+export type UpdateDigitalAssetSettingsInput = {
+  maxDownloads?: number;
+  expiryHours?: number;
 };

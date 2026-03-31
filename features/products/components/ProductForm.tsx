@@ -17,6 +17,8 @@ import { ImageUpload } from './ImageUpload';
 import { InventoryPanel } from './InventoryPanel';
 import { SeoPanel } from './SeoPanel';
 import { CollectionsPanel } from './CollectionsPanel';
+import { DigitalAssetPanel } from './DigitalAssetPanel';
+import { VariantBuilder } from './VariantBuilder';
 import { useProduct, useProducts, useProductImages, useInventory } from '../hooks/useProducts';
 import {
   formatCurrency,
@@ -27,7 +29,16 @@ import {
 } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
 import { useProductStore } from '@/store/product.store';
-import type { Product, ProductImage, ProductStatus } from '@/lib/types';
+import type {
+  Product,
+  ProductImage,
+  ProductStatus,
+  ProductType,
+  ProductOption,
+  ProductVariant,
+  DigitalAsset,
+  UpdateVariantInput,
+} from '@/lib/types';
 
 // ─── Zod schema ───────────────────────────────────────────────────────────────
 
@@ -40,6 +51,26 @@ const schema = z.object({
 });
 
 type Fields = z.infer<typeof schema>;
+
+// ─── Product type config ──────────────────────────────────────────────────────
+
+const PRODUCT_TYPE_OPTIONS: { value: ProductType; label: string; desc: string }[] = [
+  {
+    value: 'PHYSICAL',
+    label: 'Physical',
+    desc: 'Has weight, ships to customer. Optional stock tracking.',
+  },
+  {
+    value: 'DIGITAL',
+    label: 'Digital',
+    desc: 'No shipping. Customer receives a download link after payment.',
+  },
+  {
+    value: 'SERVICE',
+    label: 'Service',
+    desc: 'No shipping. Merchant arranges fulfilment manually. Suits hire businesses.',
+  },
+];
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -79,11 +110,7 @@ function HelperText({ children }: { children: React.ReactNode }) {
 
 // ─── Checklist ────────────────────────────────────────────────────────────────
 
-type ChecklistItem = {
-  label: string;
-  done: boolean;
-  section: string;
-};
+type ChecklistItem = { label: string; done: boolean; section: string };
 
 function CompletionChecklist({
   items,
@@ -182,7 +209,6 @@ export function ProductForm({ mode }: Props) {
   const router = useRouter();
   const params = useParams();
   const storeId = params.storeId as string;
-  // productId is only present in edit mode
   const productId = mode === 'edit' ? (params.id as string) : '';
 
   const stores = useAuthStore((s) => s.stores);
@@ -192,7 +218,6 @@ export function ProductForm({ mode }: Props) {
 
   const setGlobalDirty = useProductStore((s) => s.setDirty);
 
-  // Hooks — create uses useProducts, edit uses useProduct
   const { createProduct } = useProducts(storeId);
   const { updateProduct, isPending: isUpdating } = useProduct(storeId, productId);
   const {
@@ -208,6 +233,10 @@ export function ProductForm({ mode }: Props) {
   const [product, setProduct] = useState<Product | null>(null);
   const [images, setImages] = useState<ProductImage[]>([]);
   const [status, setStatus] = useState<ProductStatus>('DRAFT');
+  const [productType, setProductType] = useState<ProductType>('PHYSICAL');
+  const [options, setOptions] = useState<ProductOption[]>([]);
+  const [variants, setVariants] = useState<ProductVariant[]>([]);
+  const [digitalAsset, setDigitalAsset] = useState<DigitalAsset | null>(null);
   const [inventory, setInventory] = useState({
     trackQuantity: false,
     onHand: 0,
@@ -220,7 +249,6 @@ export function ProductForm({ mode }: Props) {
 
   // ─── UI state ─────────────────────────────────────────────────────────────
 
-  // In create mode we never fetch so loading starts false
   const [loading, setLoading] = useState(mode === 'edit');
   const [error, setError] = useState('');
   const [isDirty, setIsDirty] = useState(false);
@@ -243,7 +271,7 @@ export function ProductForm({ mode }: Props) {
     defaultValues: { title: '', description: '', sku: '', taxable: true, weight: '' },
   });
 
-  // ─── Sync isDirty to global store + ref ──────────────────────────────────
+  // ─── Sync isDirty ─────────────────────────────────────────────────────────
 
   isDirtyRef.current = isDirty;
 
@@ -256,7 +284,6 @@ export function ProductForm({ mode }: Props) {
 
   useEffect(() => {
     if (mode !== 'edit') {
-      // Create mode — mark as loaded immediately so dirty tracking works
       loadedRef.current = true;
       return;
     }
@@ -284,7 +311,6 @@ export function ProductForm({ mode }: Props) {
         if (!res.ok) throw new Error('Failed to load product');
         const p: Product = await res.json();
         if (cancelled) return;
-
         applyProductToState(p);
         loadedRef.current = true;
       } catch {
@@ -300,13 +326,17 @@ export function ProductForm({ mode }: Props) {
     };
   }, [storeId, productId, mode]);
 
-  // ─── Apply product data to all state ─────────────────────────────────────
+  // ─── Apply product data to state ─────────────────────────────────────────
 
   function applyProductToState(p: Product) {
     setProduct(p);
     setImages(p.images ?? []);
     setStatus(p.status);
     statusRef.current = p.status;
+    setProductType(p.productType ?? 'PHYSICAL');
+    setOptions(p.options ?? []);
+    setVariants(p.variants ?? []);
+    setDigitalAsset(p.digitalAsset ?? null);
     setPriceDisplay(formatPriceInput(p.price));
     setCompareDisplay(formatPriceInput(p.compareAtPrice ?? 0));
     setLastSaved(p.updatedAt ?? null);
@@ -347,7 +377,7 @@ export function ProductForm({ mode }: Props) {
     return () => sub.unsubscribe();
   }, [form]);
 
-  // ─── Browser navigation warning (back/forward) ─────────────────────────────
+  // ─── Browser navigation warning ───────────────────────────────────────────
 
   useEffect(() => {
     function handlePopState() {
@@ -357,14 +387,9 @@ export function ProductForm({ mode }: Props) {
       setPendingNavTarget(`/dashboard/${storeId}/products`);
       setShowNavWarning(true);
     }
-
-    // Push a state entry so we can detect the back button
     window.history.pushState(null, '', window.location.href);
     window.addEventListener('popstate', handlePopState);
-
-    return () => {
-      window.removeEventListener('popstate', handlePopState);
-    };
+    return () => window.removeEventListener('popstate', handlePopState);
   }, [storeId]);
 
   // ─── Browser unload warning ───────────────────────────────────────────────
@@ -414,7 +439,13 @@ export function ProductForm({ mode }: Props) {
     markDirty();
   }
 
-  // ─── Image handlers (edit mode only — product must exist) ─────────────────
+  function handleProductTypeChange(newType: ProductType) {
+    if (newType === productType) return;
+    setProductType(newType);
+    markDirty();
+  }
+
+  // ─── Image handlers ───────────────────────────────────────────────────────
 
   async function handleImageUpload(file: File) {
     const image = await uploadImage(file);
@@ -453,8 +484,10 @@ export function ProductForm({ mode }: Props) {
       compareAtPrice: compareDisplay ? parsePriceInput(compareDisplay) : undefined,
       sku: data.sku || undefined,
       taxable: data.taxable ?? true,
-      weight: data.weight ? Number(data.weight) : undefined,
+      // Only send weight for PHYSICAL products — shipping irrelevant for DIGITAL/SERVICE
+      weight: productType === 'PHYSICAL' && data.weight ? Number(data.weight) : undefined,
       status: statusRef.current,
+      productType,
       metaTitle: seo.metaTitle || undefined,
       metaDescription: seo.metaDescription || undefined,
       handle: seo.handle || undefined,
@@ -462,16 +495,11 @@ export function ProductForm({ mode }: Props) {
 
     try {
       if (mode === 'create') {
-        // ── Create mode ────────────────────────────────────────────────────
-        // POST → get new product ID → replace URL to edit page seamlessly
         const created = await createProduct(payload);
         setIsDirty(false);
-        addToast('Product created');
-
-        // Replace so back button goes to list, not back to the blank create form
+        addToast('Product created — now add your details');
         router.replace(`/dashboard/${storeId}/products/${created.id}`);
       } else {
-        // ── Edit mode ──────────────────────────────────────────────────────
         const [updated] = await Promise.all([updateProduct(payload), updateInventory(inventory)]);
         applyProductToState(updated);
         setIsDirty(false);
@@ -486,6 +514,16 @@ export function ProductForm({ mode }: Props) {
   const isPending = isUpdating;
   const taxable = form.watch('taxable') ?? true;
 
+  // ─── Derived type flags ───────────────────────────────────────────────────
+
+  const isPhysical = productType === 'PHYSICAL';
+  const isDigital = productType === 'DIGITAL';
+  const isService = productType === 'SERVICE';
+
+  const showShippingSection = isPhysical;
+  const showInventoryPanel = isPhysical || isService;
+  const showDigitalPanel = isDigital;
+
   // ─── Checklist ────────────────────────────────────────────────────────────
 
   const priceSet = parsePriceInput(priceDisplay) > 0;
@@ -497,11 +535,10 @@ export function ProductForm({ mode }: Props) {
     { label: 'Set to Active to publish', done: status === 'ACTIVE', section: 'section-status' },
   ];
 
-  // Show checklist in create mode always; in edit mode only when product loaded
   const showChecklist =
     (mode === 'create' || product !== null) && checklistItems.some((item) => !item.done);
 
-  // ─── Page title / subtitle ────────────────────────────────────────────────
+  // ─── Page header strings ──────────────────────────────────────────────────
 
   const pageTitle = mode === 'create' ? 'New product' : (product?.title ?? 'Edit product');
   const pageSubtitle =
@@ -518,7 +555,6 @@ export function ProductForm({ mode }: Props) {
       : isDirty
         ? 'var(--amber)'
         : 'var(--text-secondary)';
-
   const saveButtonLabel =
     mode === 'create' ? 'Save product' : isPending ? 'Saving…' : 'Save changes';
 
@@ -559,9 +595,7 @@ export function ProductForm({ mode }: Props) {
               setGlobalDirty(false);
               setShowNavWarning(false);
               isBrowserBackRef.current = false;
-              if (pendingNavTarget) {
-                router.push(pendingNavTarget);
-              }
+              if (pendingNavTarget) router.push(pendingNavTarget);
             }}
           >
             Leave anyway
@@ -570,7 +604,7 @@ export function ProductForm({ mode }: Props) {
       </Modal>
 
       <form onSubmit={form.handleSubmit(onSubmit)}>
-        {/* Header */}
+        {/* ── Page header ─────────────────────────────────────────────────── */}
         <div className="flex items-start justify-between mb-6">
           <div className="space-y-0.5">
             <h1
@@ -583,7 +617,6 @@ export function ProductForm({ mode }: Props) {
               {pageSubtitle}
             </p>
           </div>
-
           <div className="flex items-center gap-2">
             <Button
               type="button"
@@ -620,9 +653,10 @@ export function ProductForm({ mode }: Props) {
           </div>
         )}
 
-        <div className="grid grid-cols-3 gap-5">
-          {/* Left column */}
+        <div className="grid grid-cols-3 gap-5 items-start">
+          {/* ── Left column ───────────────────────────────────────────────── */}
           <div className="col-span-2 space-y-5">
+            {/* 1. Product details */}
             <Section id="section-details" title="Product details">
               <div className="space-y-1.5">
                 <Label htmlFor="title">Product name *</Label>
@@ -681,7 +715,69 @@ export function ProductForm({ mode }: Props) {
               </div>
             </Section>
 
-            {/* Images — disabled in create mode until product is saved */}
+            {/* 2. Product type */}
+            <Section id="section-type" title="Product type">
+              <div className="space-y-2">
+                {PRODUCT_TYPE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => handleProductTypeChange(opt.value)}
+                    className="w-full flex items-start gap-3 px-3 py-2.5 rounded-lg text-left transition-all duration-150"
+                    style={{
+                      background:
+                        productType === opt.value ? 'var(--accent-dim)' : 'var(--bg-elevated)',
+                      border:
+                        productType === opt.value
+                          ? '1px solid rgba(88,81,234,0.3)'
+                          : '1px solid transparent',
+                    }}
+                  >
+                    <div
+                      className="mt-0.5 w-3.5 h-3.5 rounded-full border-2 shrink-0 flex items-center justify-center"
+                      style={{
+                        borderColor:
+                          productType === opt.value ? 'var(--accent)' : 'var(--bg-border)',
+                        background: productType === opt.value ? 'var(--accent)' : 'transparent',
+                      }}
+                    >
+                      {productType === opt.value && (
+                        <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                      )}
+                    </div>
+                    <div>
+                      <p
+                        className="text-sm font-medium"
+                        style={{
+                          color:
+                            productType === opt.value ? 'var(--accent)' : 'var(--text-primary)',
+                        }}
+                      >
+                        {opt.label}
+                      </p>
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                        {opt.desc}
+                      </p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              {isDigital && (
+                <p className="text-xs px-1" style={{ color: 'var(--text-tertiary)' }}>
+                  Customer receives a secure download link by email after payment. The link expires
+                  after the configured time and download count.
+                </p>
+              )}
+              {isService && (
+                <p className="text-xs px-1" style={{ color: 'var(--text-tertiary)' }}>
+                  No shipping collected at checkout. Useful for hire businesses — enable stock
+                  tracking below to track units owned.
+                </p>
+              )}
+            </Section>
+
+            {/* 3. Images */}
             <Section id="section-images" title="Images">
               {mode === 'create' ? (
                 <div
@@ -706,6 +802,7 @@ export function ProductForm({ mode }: Props) {
               )}
             </Section>
 
+            {/* 4. Pricing */}
             <Section id="section-pricing" title="Pricing">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
@@ -762,42 +859,109 @@ export function ProductForm({ mode }: Props) {
               </div>
             </Section>
 
-            <Section id="section-inventory" title="Inventory">
-              <div className="space-y-1.5 mb-4">
-                <Label htmlFor="sku">SKU (Stock Keeping Unit)</Label>
-                <Input id="sku" placeholder="e.g. SHIRT-BLU-M" {...form.register('sku')} />
-                <HelperText>
-                  Your internal product code. Customers never see this. Leave blank if you
-                  don&apos;t use product codes.
-                </HelperText>
-              </div>
-              <InventoryPanel
-                value={inventory}
-                onChange={(v) => {
-                  setInventory(v);
-                  markDirty();
-                }}
-                disabled={isPending}
-              />
-            </Section>
+            {/* 5. Digital file — DIGITAL only */}
+            {showDigitalPanel && (
+              <Section id="section-digital" title="Digital file">
+                {mode === 'edit' ? (
+                  <DigitalAssetPanel
+                    storeId={storeId}
+                    productId={productId}
+                    asset={digitalAsset}
+                    onChange={setDigitalAsset}
+                    disabled={isPending}
+                  />
+                ) : (
+                  <>
+                    <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                      Save your product first to upload the digital file
+                    </p>
+                    <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>
+                      You will be redirected to the edit page where you can upload your file
+                    </p>
+                  </>
+                )}
+              </Section>
+            )}
 
-            <Section id="section-shipping" title="Shipping">
-              <div className="space-y-1.5">
-                <Label htmlFor="weight">Weight (grams)</Label>
-                <Input
-                  id="weight"
-                  type="number"
-                  min={0}
-                  placeholder="0"
-                  {...form.register('weight')}
+            {/* 6. Inventory — PHYSICAL and SERVICE only */}
+            {showInventoryPanel && (
+              <Section id="section-inventory" title="Inventory">
+                <div className="space-y-1.5 mb-4">
+                  <Label htmlFor="sku">SKU (Stock Keeping Unit)</Label>
+                  <Input id="sku" placeholder="e.g. SHIRT-BLU-M" {...form.register('sku')} />
+                  <HelperText>
+                    Your internal product code. Customers never see this. Leave blank if you
+                    don&apos;t use product codes.
+                  </HelperText>
+                </div>
+                <InventoryPanel
+                  value={inventory}
+                  onChange={(v) => {
+                    setInventory(v);
+                    markDirty();
+                  }}
+                  disabled={isPending}
+                  label={isService ? 'Track units available' : undefined}
+                  helperText={
+                    isService
+                      ? 'Useful for hire businesses — set quantity to the number of units you own. Stock decrements by 1 on each purchase.'
+                      : undefined
+                  }
                 />
-                <HelperText>
-                  Product weight including packaging. Used for real-time carrier rate calculations.
-                  Leave blank if you use flat rate shipping.
-                </HelperText>
-              </div>
-            </Section>
+              </Section>
+            )}
 
+            {/* 7. Shipping — PHYSICAL only */}
+            {showShippingSection && (
+              <Section id="section-shipping" title="Shipping">
+                <div className="space-y-1.5">
+                  <Label htmlFor="weight">Weight (grams)</Label>
+                  <Input
+                    id="weight"
+                    type="number"
+                    min={0}
+                    placeholder="0"
+                    {...form.register('weight')}
+                  />
+                  <HelperText>
+                    Product weight including packaging. Used for real-time carrier rate
+                    calculations. Leave blank if you use flat rate shipping.
+                  </HelperText>
+                </div>
+              </Section>
+            )}
+
+            {/* 8. Variants — all types, edit mode only */}
+            {mode === 'edit' && (
+              <Section id="section-variants" title="Variants">
+                <p className="text-xs mb-2" style={{ color: 'var(--text-secondary)' }}>
+                  Add options like Size or Colour to create variants. Each variant can have its own
+                  price, SKU and stock level.
+                </p>
+                <VariantBuilder
+                  storeId={storeId}
+                  productId={productId}
+                  options={options}
+                  variants={variants}
+                  currency={currency}
+                  onOptionsChange={(newOptions, newVariants) => {
+                    setOptions(newOptions);
+                    setVariants(newVariants);
+                  }}
+                  onVariantUpdate={(variantId: string, updates: UpdateVariantInput) => {
+                    setVariants((prev) =>
+                      prev.map((v) => (v.id === variantId ? { ...v, ...updates } : v)),
+                    );
+                  }}
+                  onVariantDelete={(variantId: string) => {
+                    setVariants((prev) => prev.filter((v) => v.id !== variantId));
+                  }}
+                  disabled={isPending}
+                />
+              </Section>
+            )}
+
+            {/* 9. SEO */}
             <Section id="section-seo" title="Search engine optimisation">
               <SeoPanel
                 value={seo}
@@ -810,8 +974,9 @@ export function ProductForm({ mode }: Props) {
             </Section>
           </div>
 
-          {/* Right column */}
+          {/* ── Right column ───────────────────────────────────────────────── */}
           <div className="space-y-5">
+            {/* Status */}
             <Section id="section-status" title="Status">
               <div className="space-y-1.5">
                 {(
@@ -874,7 +1039,6 @@ export function ProductForm({ mode }: Props) {
                 ))}
               </div>
 
-              {/* Live link — edit mode only, when saved and active */}
               {mode === 'edit' && status === 'ACTIVE' && !isDirty && storeSlug && seo.handle && (
                 <a
                   href={`https://${storeSlug}.fynfloo.com/products/${seo.handle}`}
@@ -899,13 +1063,11 @@ export function ProductForm({ mode }: Props) {
                     : 'Save to publish these changes to your storefront'}
                 </p>
               )}
-
               {status === 'DRAFT' && (
                 <p className="text-xs mt-3" style={{ color: 'var(--text-tertiary)' }}>
                   Not published — set to Active and save to publish
                 </p>
               )}
-
               {status === 'ARCHIVED' && (
                 <p className="text-xs mt-3" style={{ color: 'var(--text-tertiary)' }}>
                   Archived — hidden from your storefront and all collections
@@ -917,7 +1079,7 @@ export function ProductForm({ mode }: Props) {
               <CompletionChecklist items={checklistItems} onScrollTo={scrollToSection} />
             )}
 
-            {/* Collections — only available in edit mode (product must exist) */}
+            {/* Collections — edit mode only */}
             <Section id="section-collections" title="Collections">
               {mode === 'create' ? (
                 <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
@@ -942,6 +1104,12 @@ export function ProductForm({ mode }: Props) {
             {mode === 'edit' && product && (
               <Section title="Summary">
                 <div className="space-y-2.5 text-sm">
+                  <div className="flex justify-between">
+                    <span style={{ color: 'var(--text-secondary)' }}>Type</span>
+                    <span className="font-medium" style={{ color: 'var(--text-primary)' }}>
+                      {productType.charAt(0) + productType.slice(1).toLowerCase()}
+                    </span>
+                  </div>
                   <div className="flex justify-between">
                     <span style={{ color: 'var(--text-secondary)' }}>Status</span>
                     <span
@@ -975,7 +1143,27 @@ export function ProductForm({ mode }: Props) {
                       {images.length === 0 ? 'None — add images' : images.length}
                     </span>
                   </div>
-                  {inventory.trackQuantity && (
+                  {variants.length > 0 && (
+                    <div className="flex justify-between">
+                      <span style={{ color: 'var(--text-secondary)' }}>Variants</span>
+                      <span className="font-medium" style={{ color: 'var(--text-primary)' }}>
+                        {variants.length}
+                      </span>
+                    </div>
+                  )}
+                  {isDigital && (
+                    <div className="flex justify-between">
+                      <span style={{ color: 'var(--text-secondary)' }}>File</span>
+                      <span
+                        className="font-medium truncate max-w-[120px]"
+                        style={{ color: digitalAsset ? 'var(--text-primary)' : 'var(--amber)' }}
+                        title={digitalAsset?.fileName}
+                      >
+                        {digitalAsset ? digitalAsset.fileName : 'No file yet'}
+                      </span>
+                    </div>
+                  )}
+                  {showInventoryPanel && inventory.trackQuantity && (
                     <div className="flex justify-between">
                       <span style={{ color: 'var(--text-secondary)' }}>Stock</span>
                       <span

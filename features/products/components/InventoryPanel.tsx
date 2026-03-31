@@ -15,6 +15,9 @@ type Props = {
   value: InventoryData;
   onChange: (value: InventoryData) => void;
   disabled?: boolean;
+  // Optional overrides for SERVICE product type
+  label?: string;
+  helperText?: string;
 };
 
 function Toggle({
@@ -48,17 +51,20 @@ function Toggle({
   );
 }
 
-export function InventoryPanel({ value, onChange, disabled }: Props) {
+export function InventoryPanel({ value, onChange, disabled, label, helperText }: Props) {
+  const toggleLabel = label ?? 'Track quantity';
+  const toggleHelperText =
+    helperText ??
+    'Turn on to monitor your stock levels. Your store will automatically show \u201cOut of stock\u201d when you run out, preventing overselling. Turn off if you make products to order or have unlimited availability.';
+
   return (
     <div className="space-y-4">
       {/* Track stock toggle */}
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-0.5 flex-1">
-          <Label>Track quantity</Label>
+          <Label>{toggleLabel}</Label>
           <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-            Turn on to monitor your stock levels. Your store will automatically show &ldquo;Out of
-            stock&rdquo; when you run out, preventing overselling. Turn off if you make products to
-            order or have unlimited availability.
+            {toggleHelperText}
           </p>
         </div>
         <Toggle
