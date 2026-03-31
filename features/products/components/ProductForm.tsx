@@ -475,6 +475,10 @@ export function ProductForm({ mode }: Props) {
   // ─── Save ─────────────────────────────────────────────────────────────────
 
   async function onSubmit(data: Fields) {
+    if (mode === 'edit' && !isDirty) {
+      return;
+    }
+
     setError('');
 
     const payload = {
@@ -632,7 +636,7 @@ export function ProductForm({ mode }: Props) {
               size="sm"
               variant={mode === 'create' || isDirty ? 'primary' : 'secondary'}
               loading={isPending}
-              disabled={isPending}
+              disabled={isPending || (mode === 'edit' && !isDirty)}
             >
               {saveButtonLabel}
             </Button>
