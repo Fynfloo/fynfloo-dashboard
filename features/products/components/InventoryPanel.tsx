@@ -15,6 +15,7 @@ type Props = {
   value: InventoryData;
   onChange: (value: InventoryData) => void;
   disabled?: boolean;
+  productType?: 'PHYSICAL' | 'SERVICE';
 };
 
 function Toggle({
@@ -48,17 +49,52 @@ function Toggle({
   );
 }
 
-export function InventoryPanel({ value, onChange, disabled }: Props) {
+// ─── Copy per product type ────────────────────────────────────────────────────
+
+const COPY = {
+  PHYSICAL: {
+    toggleLabel: 'Track quantity',
+    toggleHelper:
+      'Turn on to monitor your stock levels. Your store will automatically show \u201cOut of stock\u201d when you run out, preventing overselling. Turn off if you make products to order or have unlimited availability.',
+    onHandLabel: 'Quantity on hand',
+    onHandHelper:
+      'How many units you currently have in stock. Your store counts down as customers purchase.',
+    lowStockLabel: 'Low stock alert at',
+    lowStockHelper:
+      'You will be alerted when stock drops to this number — giving you time to reorder before you run out.',
+    oversellLabel: 'Continue selling when out of stock',
+    oversellHelper:
+      'Allow customers to buy even when stock reaches zero. Turn on for made-to-order products. Turn off if you cannot fulfil orders when stock runs out.',
+  },
+  SERVICE: {
+    toggleLabel: 'Track units available',
+    toggleHelper:
+      'Turn on if you have a limited number of units available — for example, equipment for hire. Your store counts down as customers book. Turn off if you have unlimited availability.',
+    onHandLabel: 'Units available',
+    onHandHelper:
+      'How many units you own and can make available. For example, if you own 3 vans enter 3. Your store counts down as customers book.',
+    lowStockLabel: 'Low availability alert at',
+    lowStockHelper:
+      'You will be alerted when available units drop to this number — giving you time to plan ahead.',
+    oversellLabel: 'Allow bookings when fully booked',
+    oversellHelper:
+      'Allow customers to book even when all units show as unavailable. Turn on if you can accommodate extra demand. Turn off if you cannot take on more bookings.',
+  },
+} as const;
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
+export function InventoryPanel({ value, onChange, disabled, productType = 'PHYSICAL' }: Props) {
+  const copy = COPY[productType];
+
   return (
     <div className="space-y-4">
       {/* Track stock toggle */}
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-0.5 flex-1">
-          <Label>Track quantity</Label>
+          <Label>{copy.toggleLabel}</Label>
           <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-            Turn on to monitor your stock levels. Your store will automatically show &ldquo;Out of
-            stock&rdquo; when you run out, preventing overselling. Turn off if you make products to
-            order or have unlimited availability.
+            {copy.toggleHelper}
           </p>
         </div>
         <Toggle
@@ -73,7 +109,7 @@ export function InventoryPanel({ value, onChange, disabled }: Props) {
         <div className="space-y-4 pt-4" style={{ borderTop: '1px solid var(--bg-border-subtle)' }}>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label htmlFor="onHand">Quantity on hand</Label>
+              <Label htmlFor="onHand">{copy.onHandLabel}</Label>
               <Input
                 id="onHand"
                 type="number"
@@ -83,12 +119,11 @@ export function InventoryPanel({ value, onChange, disabled }: Props) {
                 disabled={disabled}
               />
               <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                How many units you have available to ship today. Your store counts down as customers
-                purchase.
+                {copy.onHandHelper}
               </p>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="lowStockThreshold">Low stock alert at</Label>
+              <Label htmlFor="lowStockThreshold">{copy.lowStockLabel}</Label>
               <Input
                 id="lowStockThreshold"
                 type="number"
@@ -98,8 +133,7 @@ export function InventoryPanel({ value, onChange, disabled }: Props) {
                 disabled={disabled}
               />
               <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                You get alerted when stock drops to this number. If reordering takes 2 weeks and you
-                sell 2 per day, set this to 28.
+                {copy.lowStockHelper}
               </p>
             </div>
           </div>
@@ -107,10 +141,9 @@ export function InventoryPanel({ value, onChange, disabled }: Props) {
           {/* Allow oversell toggle */}
           <div className="flex items-start justify-between gap-4">
             <div className="space-y-0.5 flex-1">
-              <Label>Continue selling when out of stock</Label>
+              <Label>{copy.oversellLabel}</Label>
               <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                Allow customers to buy even when you show zero stock. Turn on for made-to-order
-                products. Turn off if you cannot fulfil orders when stock runs out.
+                {copy.oversellHelper}
               </p>
             </div>
             <Toggle

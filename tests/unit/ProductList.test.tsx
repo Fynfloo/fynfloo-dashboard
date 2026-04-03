@@ -19,7 +19,6 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/dashboard/store-123/products',
 }));
 
-// Fix 1: selector is typed properly — no any
 vi.mock('@/store/auth.store', () => ({
   useAuthStore: <T,>(
     selector: (state: {
@@ -175,14 +174,12 @@ describe('ProductList — delete product', () => {
     render(<ProductList />);
     await waitFor(() => screen.getByText('Premium Oxford Shirt'));
 
-    // Fix 2: removed the always-true screen.getByTitle check
-    // Find the three dots button by its child icon structure
     const allButtons = screen.getAllByRole('button');
     const dotsBtn = allButtons.find(
       (btn) => btn.className.includes('rounded-lg') && btn.querySelector('svg'),
     );
 
-    if (!dotsBtn) return; // guard — button may not render without hover in jsdom
+    if (!dotsBtn) return;
 
     await user.click(dotsBtn);
 
@@ -196,56 +193,37 @@ describe('ProductList — delete product', () => {
   });
 });
 
-describe('ProductList — quick create modal', () => {
+describe('ProductList — add product', () => {
   beforeEach(() => {
     mockPush.mockClear();
   });
 
-  it('opens modal when Add product button clicked', async () => {
+  it('navigates to new product page when Add product button clicked', async () => {
     const user = userEvent.setup();
     render(<ProductList />);
     await waitFor(() => screen.getByText('Premium Oxford Shirt'));
 
     await user.click(screen.getByRole('button', { name: /add product/i }));
 
-    await waitFor(() => {
-      expect(screen.getByText('Add a new product')).toBeInTheDocument();
-    });
+    expect(mockPush).toHaveBeenCalledWith('/dashboard/store-123/products/new');
   });
 
-  it('shows validation error when submitting empty name', async () => {
+  it('navigates to new product page from empty state Add product button', async () => {
+    server.use(
+      http.get(`${API}/api/tenant/${storeId}/products`, () =>
+        HttpResponse.json({ products: [], total: 0, page: 1, limit: 20 }),
+      ),
+    );
+
     const user = userEvent.setup();
     render(<ProductList />);
-    await waitFor(() => screen.getByText('Premium Oxford Shirt'));
+    await waitFor(() => screen.getByText('No products yet'));
 
-    await user.click(screen.getByRole('button', { name: /add product/i }));
-    await waitFor(() => screen.getByText('Add a new product'));
+    // Two "Add product" buttons exist — header + empty state
+    // Click either one — both call the same handler
+    const addButtons = screen.getAllByRole('button', { name: /add product/i });
+    await user.click(addButtons[0]);
 
-    await user.click(screen.getByRole('button', { name: 'Create product' }));
-
-    await waitFor(() => {
-      expect(screen.getByText('Product name is required')).toBeInTheDocument();
-    });
-  });
-
-  it('navigates to edit page after successful product creation', async () => {
-    const user = userEvent.setup();
-    render(<ProductList />);
-    await waitFor(() => screen.getByText('Premium Oxford Shirt'));
-
-    await user.click(screen.getByRole('button', { name: /add product/i }));
-    await waitFor(() => screen.getByText('Add a new product'));
-
-    const nameInput = screen.getByPlaceholderText('e.g. Blue Oxford Shirt');
-    await user.type(nameInput, 'New Test Product');
-
-    // Fix 3: use the mockPush defined at module level — no require()
-    await user.click(screen.getByRole('button', { name: 'Create product' }));
-
-    await waitFor(() => {
-      expect(mockPush).toHaveBeenCalledWith(
-        expect.stringMatching(/\/dashboard\/store-123\/products\//),
-      );
-    });
+    expect(mockPush).toHaveBeenCalledWith('/dashboard/store-123/products/new');
   });
 });

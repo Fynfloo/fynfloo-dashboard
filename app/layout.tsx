@@ -26,7 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable}`}
     >
-      <body className="antialiased">
+      <body className="antialiased h-screen overflow-hidden">
         <Providers>{children}</Providers>
       </body>
     </html>

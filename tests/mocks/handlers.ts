@@ -20,6 +20,10 @@ export const mockProduct: Product = {
   sku: 'SHIRT-001',
   taxable: true,
   weight: 300,
+  productType: 'PHYSICAL',
+  options: [],
+  variants: [],
+  digitalAsset: null,
   metadata: {
     metaTitle: 'Oxford Shirt — Free UK Delivery',
     metaDescription: 'Buy our premium Oxford shirt.',
