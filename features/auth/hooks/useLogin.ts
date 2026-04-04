@@ -65,7 +65,7 @@ export function useLogin() {
       }
 
       if ('accessToken' in res) {
-        setAccessToken(res.accessToken);
+        setAccessToken(res.accessToken, res.expiresIn);
         await hydrateUser(setUser, setStores, setLoading);
       }
 
@@ -92,7 +92,7 @@ export function useMfaVerify() {
         body: input,
         skipRefresh: true,
       });
-      setAccessToken(res.accessToken);
+      setAccessToken(res.accessToken, res.expiresIn);
       await hydrateUser(setUser, setStores, setLoading);
     } finally {
       setIsPending(false);
