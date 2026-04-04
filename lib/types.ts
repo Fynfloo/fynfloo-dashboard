@@ -30,10 +30,13 @@ export type StoresResponse = {
 };
 
 // Login responses
-export type LoginResponse = { accessToken: string } | { requiresMfa: true; mfaToken: string };
+export type LoginResponse =
+  | { accessToken: string; expiresIn: number }
+  | { requiresMfa: true; mfaToken: string };
 
 export type MfaVerifyResponse = {
   accessToken: string;
+  expiresIn: number;
 };
 
 export type SignupResponse = {

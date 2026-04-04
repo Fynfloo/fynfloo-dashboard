@@ -10,6 +10,7 @@ type CreateTenantResponse = {
   tenantId: string;
   slug: string;
   accessToken: string;
+  expiresIn: number;
 };
 
 type SubdomainCheckResponse = {
@@ -54,7 +55,7 @@ export function useOnboarding() {
       });
 
       // Update access token — new JWT includes tenant claim
-      setAccessToken(res.accessToken);
+      setAccessToken(res.accessToken, res.expiresIn);
 
       // Update stores in Zustand
       const newStore: Store = {
