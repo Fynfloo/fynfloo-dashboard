@@ -247,6 +247,17 @@ export function ProductForm({ mode }: Props) {
   const [priceDisplay, setPriceDisplay] = useState('');
   const [compareDisplay, setCompareDisplay] = useState('');
 
+  // ─── Derived type flags ───────────────────────────────────────────────────
+
+  const isPhysical = productType === 'PHYSICAL';
+  const isDigital = productType === 'DIGITAL';
+  const isService = productType === 'SERVICE';
+  const hasVariants = variants.length > 0;
+
+  const showShippingSection = isPhysical;
+  const showInventoryPanel = isPhysical || isService;
+  const showDigitalPanel = isDigital;
+
   // ─── UI state ─────────────────────────────────────────────────────────────
 
   const [loading, setLoading] = useState(mode === 'edit');
@@ -486,7 +497,7 @@ export function ProductForm({ mode }: Props) {
       description: data.description || undefined,
       price: parsePriceInput(priceDisplay),
       compareAtPrice: compareDisplay ? parsePriceInput(compareDisplay) : undefined,
-      sku: data.sku || undefined,
+      sku: !hasVariants ? data.sku || undefined : undefined,
       taxable: data.taxable ?? true,
       // Only send weight for PHYSICAL products — shipping irrelevant for DIGITAL/SERVICE
       weight: productType === 'PHYSICAL' && data.weight ? Number(data.weight) : undefined,
@@ -517,16 +528,6 @@ export function ProductForm({ mode }: Props) {
 
   const isPending = isUpdating;
   const taxable = form.watch('taxable') ?? true;
-
-  // ─── Derived type flags ───────────────────────────────────────────────────
-
-  const isPhysical = productType === 'PHYSICAL';
-  const isDigital = productType === 'DIGITAL';
-  const isService = productType === 'SERVICE';
-
-  const showShippingSection = isPhysical;
-  const showInventoryPanel = isPhysical || isService;
-  const showDigitalPanel = isDigital;
 
   // ─── Checklist ────────────────────────────────────────────────────────────
 
@@ -837,6 +838,14 @@ export function ProductForm({ mode }: Props) {
                 </div>
               </div>
 
+              {/* Note when variants exist — base price seeds new variants */}
+              {hasVariants && (
+                <p className="text-xs px-1" style={{ color: 'var(--text-tertiary)' }}>
+                  This is the base price - individual variant prices are set in the Variants section
+                  below. It is also used as the starting price when regenerating variants.
+                </p>
+              )}
+
               <div className="flex items-center justify-between pt-2">
                 <div className="space-y-0.5">
                   <Label>Charge tax on this product</Label>
@@ -887,50 +896,7 @@ export function ProductForm({ mode }: Props) {
               </Section>
             )}
 
-            {/* 6. Inventory — PHYSICAL and SERVICE only */}
-            {showInventoryPanel && (
-              <Section id="section-inventory" title="Inventory">
-                <div className="space-y-1.5 mb-4">
-                  <Label htmlFor="sku">SKU (Stock Keeping Unit)</Label>
-                  <Input id="sku" placeholder="e.g. SHIRT-BLU-M" {...form.register('sku')} />
-                  <HelperText>
-                    Your internal product code. Customers never see this. Leave blank if you
-                    don&apos;t use product codes.
-                  </HelperText>
-                </div>
-                <InventoryPanel
-                  value={inventory}
-                  onChange={(v) => {
-                    setInventory(v);
-                    markDirty();
-                  }}
-                  disabled={isPending}
-                  productType={isService ? 'SERVICE' : 'PHYSICAL'}
-                />
-              </Section>
-            )}
-
-            {/* 7. Shipping — PHYSICAL only */}
-            {showShippingSection && (
-              <Section id="section-shipping" title="Shipping">
-                <div className="space-y-1.5">
-                  <Label htmlFor="weight">Weight (grams)</Label>
-                  <Input
-                    id="weight"
-                    type="number"
-                    min={0}
-                    placeholder="0"
-                    {...form.register('weight')}
-                  />
-                  <HelperText>
-                    Product weight including packaging. Used for real-time carrier rate
-                    calculations. Leave blank if you use flat rate shipping.
-                  </HelperText>
-                </div>
-              </Section>
-            )}
-
-            {/* 8. Variants — all types, edit mode only */}
+            {/* 6. Variants — PHYSICAL, edit mode only — BEFORE inventory */}
             {mode === 'edit' && isPhysical && (
               <Section id="section-variants" title="Variants">
                 <p className="text-xs mb-2" style={{ color: 'var(--text-secondary)' }}>
@@ -963,6 +929,53 @@ export function ProductForm({ mode }: Props) {
                   }}
                   disabled={isPending}
                 />
+              </Section>
+            )}
+
+            {/* 7. Inventory — PHYSICAL and SERVICE only — AFTER variants */}
+            {showInventoryPanel && (
+              <Section id="section-inventory" title="Inventory">
+                {/* SKU hidden when variants exist — each variant has its own SKU */}
+                {!hasVariants && (
+                  <div className="space-y-1.5 mb-4">
+                    <Label htmlFor="sku">SKU (Stock Keeping Unit)</Label>
+                    <Input id="sku" placeholder="e.g. SHIRT-BLU-M" {...form.register('sku')} />
+                    <HelperText>
+                      Your internal product code. Customers never see this. Leave blank if you
+                      don&apos;t use product codes.
+                    </HelperText>
+                  </div>
+                )}
+                <InventoryPanel
+                  value={inventory}
+                  onChange={(v) => {
+                    setInventory(v);
+                    markDirty();
+                  }}
+                  disabled={isPending}
+                  productType={isService ? 'SERVICE' : 'PHYSICAL'}
+                  hasVariants={hasVariants}
+                />
+              </Section>
+            )}
+
+            {/* 8. Shipping — PHYSICAL only */}
+            {showShippingSection && (
+              <Section id="section-shipping" title="Shipping">
+                <div className="space-y-1.5">
+                  <Label htmlFor="weight">Weight (grams)</Label>
+                  <Input
+                    id="weight"
+                    type="number"
+                    min={0}
+                    placeholder="0"
+                    {...form.register('weight')}
+                  />
+                  <HelperText>
+                    Product weight including packaging. Used for real-time carrier rate
+                    calculations. Leave blank if you use flat rate shipping.
+                  </HelperText>
+                </div>
               </Section>
             )}
 
