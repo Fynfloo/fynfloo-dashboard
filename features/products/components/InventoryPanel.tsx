@@ -16,6 +16,7 @@ type Props = {
   onChange: (value: InventoryData) => void;
   disabled?: boolean;
   productType?: 'PHYSICAL' | 'SERVICE';
+  hasVariants?: boolean; // ← added — collapses panel when true
 };
 
 function Toggle({
@@ -84,8 +85,56 @@ const COPY = {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function InventoryPanel({ value, onChange, disabled, productType = 'PHYSICAL' }: Props) {
+export function InventoryPanel({
+  value,
+  onChange,
+  disabled,
+  productType = 'PHYSICAL',
+  hasVariants = false, // ← added
+}: Props) {
   const copy = COPY[productType];
+
+  // ── Variant mode — inventory managed per variant ───────────────────────────
+  // When the product has variants, stock is tracked per variant row
+  // in the VariantBuilder (SKU + stock fields in expanded variant row).
+  // The product-level quantity input is hidden — it has no meaning
+  // when each variant tracks its own stock independently.
+  // The track quantity toggle is still shown — turning it off disables
+  // stock tracking entirely across all variants.
+  if (hasVariants) {
+    return (
+      <div className="space-y-4">
+        <div
+          className="rounded-lg px-3.5 py-3 text-sm"
+          style={{
+            background: 'var(--bg-elevated)',
+            border: '1px solid var(--bg-border-subtle)',
+            color: 'var(--text-secondary)',
+          }}
+        >
+          Stock is tracked per variant. Set quantity and SKU for each variant in the Variants
+          section above.
+        </div>
+
+        {/* Track quantity toggle still relevant — turns off tracking entirely */}
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-0.5 flex-1">
+            <Label>{copy.toggleLabel}</Label>
+            <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+              Turn off to disable stock tracking across all variants entirely.
+            </p>
+          </div>
+          <Toggle
+            checked={value.trackQuantity}
+            onChange={() => onChange({ ...value, trackQuantity: !value.trackQuantity })}
+            disabled={disabled}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // ── Standard mode — no variants ───────────────────────────────────────────
 
   return (
     <div className="space-y-4">
