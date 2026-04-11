@@ -9,10 +9,11 @@ import { Badge } from '@/components/ui/badge';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { DropdownMenu } from '@/components/ui/dropdown-menu';
 import { DiscountForm } from './DiscountForm';
-import { useDiscounts, useDiscount } from '../hooks/useDiscounts';
+import { useDiscounts } from '../hooks/useDiscounts';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
 import type { DiscountCode, DiscountType } from '@/lib/types';
+import { apiRequest } from '@/lib/api';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -46,7 +47,27 @@ const TYPE_LABELS: Record<DiscountType, string> = {
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
 
-function DiscountStatusBadge({ discount }: { discount: DiscountCode }) {
+function DiscountStatusBadge({
+  discount,
+  isToggling,
+}: {
+  discount: DiscountCode;
+  isToggling: boolean;
+}) {
+  if (isToggling) {
+    return (
+      <div className="flex items-center gap-1.5">
+        <div
+          className="w-3 h-3 rounded-full border-2 border-t-transparent animate-spin"
+          style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }}
+        />
+        <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+          Saving…
+        </span>
+      </div>
+    );
+  }
+
   const now = new Date();
   const expired = discount.expiresAt && new Date(discount.expiresAt) < now;
   const limitReached = discount.usageLimit !== null && discount.usageCount >= discount.usageLimit;
@@ -217,12 +238,14 @@ export function DiscountList() {
   // ─── Inline deactivate ─────────────────────────────────────────────────────
 
   const [togglingId, setTogglingId] = useState<string | null>(null);
-  const { updateDiscount } = useDiscount(storeId, togglingId ?? '');
 
   async function handleToggleActive(discount: DiscountCode) {
     setTogglingId(discount.id);
     try {
-      const updated = await updateDiscount({ active: !discount.active });
+      const updated = await apiRequest<DiscountCode>(
+        `/api/tenant/${storeId}/discounts/${discount.id}`,
+        { method: 'PATCH', body: { active: !discount.active } },
+      );
       setDiscounts((prev) => prev.map((d) => (d.id === updated.id ? updated : d)));
     } catch {
       setError('Failed to update discount — please try again');
@@ -305,94 +328,105 @@ export function DiscountList() {
               </tr>
             </thead>
             <tbody>
-              {discounts.map((discount, i) => (
-                <tr
-                  key={discount.id}
-                  style={{
-                    borderBottom:
-                      i < discounts.length - 1 ? '1px solid var(--bg-border-subtle)' : 'none',
-                    cursor: 'pointer',
-                    transition: 'background 0.1s',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'var(--bg-elevated)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'transparent';
-                  }}
-                  onClick={() => openEdit(discount)}
-                >
-                  {/* Code + conditions */}
-                  <td className="px-4 py-3">
-                    <p
-                      className="text-sm font-semibold font-mono"
-                      style={{ color: 'var(--text-primary)', letterSpacing: '0.02em' }}
-                    >
-                      {discount.code}
-                    </p>
-                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
-                      {formatConditions(discount, currency)}
-                    </p>
-                  </td>
+              {discounts.map((discount, i) => {
+                const isToggling = togglingId === discount.id;
 
-                  {/* Type */}
-                  <td className="px-4 py-3">
-                    <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                      {TYPE_LABELS[discount.type]}
-                    </span>
-                  </td>
+                return (
+                  <tr
+                    key={discount.id}
+                    style={{
+                      borderBottom:
+                        i < discounts.length - 1 ? '1px solid var(--bg-border-subtle)' : 'none',
+                      cursor: isToggling ? 'default' : 'pointer',
+                      transition: 'background 0.1s, opacity 0.15s',
+                      opacity: isToggling ? 0.6 : 1, // ← dim the row
+                      pointerEvents: isToggling ? 'none' : 'auto', // ← block clicks while saving
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isToggling) e.currentTarget.style.background = 'var(--bg-elevated)';
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isToggling) e.currentTarget.style.background = 'transparent';
+                    }}
+                    onClick={() => {
+                      if (!isToggling) openEdit(discount);
+                    }}
+                  >
+                    {/* Code + conditions */}
+                    <td className="px-4 py-3">
+                      <p
+                        className="text-sm font-semibold font-mono"
+                        style={{ color: 'var(--text-primary)', letterSpacing: '0.02em' }}
+                      >
+                        {discount.code}
+                      </p>
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
+                        {formatConditions(discount, currency)}
+                      </p>
+                    </td>
 
-                  {/* Value */}
-                  <td className="px-4 py-3">
-                    <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                      {formatDiscountValue(discount, currency)}
-                    </span>
-                  </td>
+                    {/* Type */}
+                    <td className="px-4 py-3">
+                      <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                        {TYPE_LABELS[discount.type]}
+                      </span>
+                    </td>
 
-                  {/* Status */}
-                  <td className="px-4 py-3">
-                    <DiscountStatusBadge discount={discount} />
-                  </td>
+                    {/* Value */}
+                    <td className="px-4 py-3">
+                      <span
+                        className="text-sm font-medium"
+                        style={{ color: 'var(--text-primary)' }}
+                      >
+                        {formatDiscountValue(discount, currency)}
+                      </span>
+                    </td>
 
-                  {/* Actions */}
-                  <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                    <DropdownMenu
-                      align="right"
-                      trigger={
-                        <button
-                          type="button"
-                          className="p-1.5 rounded-lg transition-colors"
-                          style={{ color: 'var(--text-secondary)' }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.background = 'var(--bg-border-subtle)';
-                            e.currentTarget.style.color = 'var(--text-primary)';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.background = 'transparent';
-                            e.currentTarget.style.color = 'var(--text-secondary)';
-                          }}
-                        >
-                          <MoreHorizontal className="h-4 w-4" />
-                        </button>
-                      }
-                      items={[
-                        {
-                          label: 'Edit',
-                          icon: <Pencil className="h-3.5 w-3.5" />,
-                          onClick: () => openEdit(discount),
-                        },
-                        {
-                          label: discount.active ? 'Deactivate' : 'Activate',
-                          icon: <ToggleLeft className="h-3.5 w-3.5" />,
-                          onClick: () => handleToggleActive(discount),
-                          disabled: togglingId === discount.id,
-                          dividerAbove: true,
-                        },
-                      ]}
-                    />
-                  </td>
-                </tr>
-              ))}
+                    {/* Status — shows spinner while toggling */}
+                    <td className="px-4 py-3">
+                      <DiscountStatusBadge discount={discount} isToggling={isToggling} />
+                    </td>
+
+                    {/* Actions */}
+                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenu
+                        align="right"
+                        trigger={
+                          <button
+                            type="button"
+                            className="p-1.5 rounded-lg transition-colors"
+                            style={{ color: 'var(--text-secondary)' }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = 'var(--bg-border-subtle)';
+                              e.currentTarget.style.color = 'var(--text-primary)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = 'transparent';
+                              e.currentTarget.style.color = 'var(--text-secondary)';
+                            }}
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </button>
+                        }
+                        items={[
+                          {
+                            label: 'Edit',
+                            icon: <Pencil className="h-3.5 w-3.5" />,
+                            onClick: () => openEdit(discount),
+                          },
+                          {
+                            label: discount.active ? 'Deactivate' : 'Activate',
+                            icon: <ToggleLeft className="h-3.5 w-3.5" />,
+                            onClick: () => handleToggleActive(discount),
+                            disabled: isToggling,
+                            dividerAbove: true,
+                          },
+                        ]}
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
