@@ -203,3 +203,38 @@ export type UpdateDigitalAssetSettingsInput = {
   maxDownloads?: number;
   expiryHours?: number;
 };
+
+// ─── Discount types ───────────────────────────────────────────────────────────
+
+export type DiscountType = 'PERCENTAGE' | 'FIXED_AMOUNT' | 'FREE_SHIPPING';
+
+export type DiscountCode = {
+  id: string;
+  code: string;
+  type: DiscountType;
+  value: number; // percentage (20) or pence (1000) — 0 for FREE_SHIPPING
+  minOrderValue: number | null; // pence
+  usageLimit: number | null;
+  usageCount: number;
+  active: boolean;
+  expiresAt: string | null; // ISO string
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CreateDiscountInput = {
+  code: string;
+  type: DiscountType;
+  value: number;
+  minOrderValue?: number; // pence
+  usageLimit?: number;
+  expiresAt?: string; // ISO string
+};
+
+export type UpdateDiscountInput = {
+  value?: number;
+  minOrderValue?: number;
+  usageLimit?: number;
+  expiresAt?: string;
+  active?: boolean;
+};
