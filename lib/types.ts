@@ -238,3 +238,109 @@ export type UpdateDiscountInput = {
   expiresAt?: string;
   active?: boolean;
 };
+
+// ─── Order types ──────────────────────────────────────────────────────────────
+
+export type OrderStatus = 'PENDING' | 'PAID' | 'PARTIALLY_REFUNDED' | 'REFUNDED' | 'CANCELLED';
+
+export type FulfilmentStatus = 'UNFULFILLED' | 'FULFILLED';
+
+export type OrderEventType =
+  | 'ORDER_PLACED'
+  | 'PAYMENT_CONFIRMED'
+  | 'ORDER_FULFILLED'
+  | 'TRACKING_ADDED'
+  | 'NOTE_ADDED'
+  | 'ORDER_REFUNDED';
+
+export type OrderListItem = {
+  id: string;
+  orderNumber: number;
+  status: OrderStatus;
+  fulfilmentStatus: FulfilmentStatus;
+  totalPence: number;
+  currency: string;
+  itemCount: number;
+  customerName: string | null;
+  email: string | null;
+  createdAt: string;
+  paidAt: string | null;
+};
+
+export type OrderListResponse = {
+  orders: OrderListItem[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+};
+
+export type OrderItem = {
+  id: string;
+  name: string;
+  sku: string | null;
+  pricePence: number;
+  quantity: number;
+  imageUrl: string | null;
+  variantTitle: string | null;
+  weightGrams: number | null;
+};
+
+export type OrderRefund = {
+  id: string;
+  amountPence: number;
+  reason: string | null;
+  createdAt: string;
+};
+
+export type OrderEvent = {
+  id: string;
+  type: OrderEventType;
+  description: string;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+};
+
+export type OrderDetail = {
+  id: string;
+  orderNumber: number;
+  status: OrderStatus;
+  fulfilmentStatus: FulfilmentStatus;
+  currency: string;
+  subtotalPence: number;
+  shippingPence: number;
+  discountCode: string | null;
+  discountPence: number | null;
+  totalPence: number;
+  customerName: string | null;
+  email: string | null;
+  phone: string | null;
+  customerId: string | null;
+  addressLine1: string | null;
+  addressLine2: string | null;
+  city: string | null;
+  postCode: string | null;
+  country: string | null;
+  trackingNumber: string | null;
+  trackingUrl: string | null;
+  courierName: string | null;
+  notes: string | null;
+  customerNote: string | null;
+  paymentIntentId: string | null;
+  fulfilledAt: string | null;
+  paidAt: string | null;
+  refundedAt: string | null;
+  createdAt: string;
+  items: OrderItem[];
+  refunds: OrderRefund[];
+  events: OrderEvent[];
+};
+
+export type OrderSummary = {
+  unfulfilledCount: number;
+};
+
+export type FulfilOrderInput = {
+  trackingNumber?: string;
+  courierName?: string;
+};
