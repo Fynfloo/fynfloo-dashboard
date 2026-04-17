@@ -344,3 +344,62 @@ export type FulfilOrderInput = {
   trackingNumber?: string;
   courierName?: string;
 };
+
+// ─── Analytics ────────────────────────────────────────────────────────────────
+
+export type AnalyticsPeriod = 7 | 30 | 90;
+
+export interface AnalyticsOverview {
+  period: AnalyticsPeriod;
+  revenuePence: number;
+  orders: number;
+  avgOrderValuePence: number;
+  customers: number;
+  newCustomers: number;
+  returningCustomers: number;
+  revenueChange: number | null;
+  ordersChange: number | null;
+}
+
+export interface RevenueDataPoint {
+  date: string;
+  revenuePence: number;
+  orders: number;
+}
+
+export interface AnalyticsRevenue {
+  period: AnalyticsPeriod;
+  data: RevenueDataPoint[];
+}
+
+export interface TopProduct {
+  productId: string;
+  name: string;
+  revenuePence: number;
+  unitsSold: number;
+}
+
+export interface AnalyticsTopProducts {
+  byRevenue: TopProduct[];
+  byUnits: TopProduct[];
+}
+
+// ─── Customers ────────────────────────────────────────────────────────────────
+
+export interface CustomerListItem {
+  id: string;
+  name: string | null;
+  email: string;
+  orderCount: number;
+  totalSpentPence: number;
+  lastOrderAt: string | null;
+  createdAt: string;
+}
+
+export interface CustomerListResponse {
+  customers: CustomerListItem[];
+  total: number;
+  page: number;
+  limit: number;
+  pages: number;
+}
