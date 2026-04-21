@@ -3,6 +3,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useParams } from 'next/navigation';
 
 const TABS = [
   { label: 'General', href: '' },
@@ -13,11 +14,13 @@ const TABS = [
   { label: 'Security', href: '/security' },
 ] as const;
 
-interface SettingsNavProps {
-  storeId: string;
-}
+// interface SettingsNavProps {
+//   storeId: string;
+// }
 
-export function SettingsNav({ storeId }: SettingsNavProps) {
+export function SettingsNav() {
+  const params = useParams();
+  const storeId = params.storeId as string;
   const pathname = usePathname();
   const base = `/dashboard/${storeId}/settings`;
 

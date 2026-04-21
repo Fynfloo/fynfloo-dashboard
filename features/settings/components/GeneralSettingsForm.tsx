@@ -1,12 +1,20 @@
 // features/settings/components/GeneralSettingsForm.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useForm, useWatch } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { useSettings } from '../hooks/useSettings';
+import { useParams } from 'next/navigation';
 
-interface Props {
-  storeId: string;
-}
+const schema = z.object({
+  name: z.string().min(1, 'Store name is required').max(255),
+  email: z.email('Enter a valid email').or(z.literal('')),
+  phone: z.string().optional(),
+});
+
+type Fields = z.infer<typeof schema>;
 
 function Field({
   id,
@@ -74,24 +82,39 @@ function TextInput({
   );
 }
 
-export function GeneralSettingsForm({ storeId }: Props) {
+export function GeneralSettingsForm() {
+  const params = useParams();
+  const storeId = params.storeId as string;
   const { settings, isLoading, isSaving, error, saveSettings } = useSettings(storeId);
-
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
   const [saved, setSaved] = useState(false);
+  const loadedRef = useRef(false);
+
+  const form = useForm<Fields>({
+    resolver: zodResolver(schema),
+    defaultValues: {
+      name: '',
+      email: '',
+      phone: '',
+    },
+  });
+
+  const name = useWatch({ control: form.control, name: 'name' });
+  const email = useWatch({ control: form.control, name: 'email' });
+  const phone = useWatch({ control: form.control, name: 'phone' });
 
   useEffect(() => {
     if (settings) {
-      setName(settings.name);
-      setEmail(settings.email ?? '');
-      setPhone(settings.phone ?? '');
+      form.reset({
+        name: settings.name,
+        email: settings.email ?? '',
+        phone: settings.phone ?? '',
+      });
+      loadedRef.current = true;
     }
-  }, [settings]);
+  }, [settings, form]);
 
-  async function handleSave() {
-    const ok = await saveSettings({ name, email, phone });
+  async function onSubmit(data: Fields) {
+    const ok = await saveSettings(data);
     if (ok) {
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
@@ -128,7 +151,17 @@ export function GeneralSettingsForm({ storeId }: Props) {
       )}
 
       <Field id="name" label="Store name">
-        <TextInput id="name" value={name} onChange={setName} placeholder="My Store" />
+        {form.formState.errors.name && (
+          <p className="text-xs" style={{ color: 'var(--red)' }}>
+            {form.formState.errors.name.message}
+          </p>
+        )}
+        <TextInput
+          id="name"
+          value={name}
+          onChange={(v) => form.setValue('name', v)}
+          placeholder="My Store"
+        />
       </Field>
 
       <Field
@@ -176,28 +209,38 @@ export function GeneralSettingsForm({ storeId }: Props) {
         label="Contact email"
         helper="Shown to customers on receipts and order emails."
       >
+        {form.formState.errors.email && (
+          <p className="text-xs" style={{ color: 'var(--red)' }}>
+            {form.formState.errors.email.message}
+          </p>
+        )}
         <TextInput
           id="email"
           type="email"
           value={email}
-          onChange={setEmail}
+          onChange={(v) => form.setValue('email', v)}
           placeholder="hello@yourstore.com"
         />
       </Field>
 
       <Field id="phone" label="Phone (optional)">
+        {form.formState.errors.phone && (
+          <p className="text-xs" style={{ color: 'var(--red)' }}>
+            {form.formState.errors.phone.message}
+          </p>
+        )}
         <TextInput
           id="phone"
           type="tel"
-          value={phone}
-          onChange={setPhone}
+          value={phone ?? ''}
+          onChange={(v) => form.setValue('phone', v)}
           placeholder="+44 20 1234 5678"
         />
       </Field>
 
       <div className="flex items-center gap-3 pt-2">
         <button
-          onClick={handleSave}
+          onClick={form.handleSubmit(onSubmit)}
           disabled={isSaving}
           className="px-4 py-2 rounded-[var(--radius-md)] text-sm font-medium transition-opacity"
           style={{

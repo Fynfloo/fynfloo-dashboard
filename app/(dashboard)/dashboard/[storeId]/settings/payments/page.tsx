@@ -3,12 +3,12 @@ import { SettingsNav } from '@/features/settings/components/SettingsNav';
 import { StripeConnectPanel } from '@/features/settings/components/StripeConnectPanel';
 import { PageHeader } from '@/components/shared/PageHeader';
 
-export default function PaymentsSettingsPage({ params }: { params: { storeId: string } }) {
+export default async function PaymentsSettingsPage() {
   return (
     <>
       <PageHeader title="Settings" />
-      <SettingsNav storeId={params.storeId} />
-      <StripeConnectPanel storeId={params.storeId} />
+      <SettingsNav />
+      <StripeConnectPanel />
     </>
   );
 }

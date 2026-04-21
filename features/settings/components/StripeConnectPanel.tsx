@@ -4,10 +4,7 @@
 import { CheckCircle, AlertCircle, ExternalLink, Loader2, RefreshCw } from 'lucide-react';
 import { useStripeConnect } from '../hooks/useSettings';
 import { useAuthStore } from '@/store/auth.store';
-
-interface Props {
-  storeId: string;
-}
+import { useParams } from 'next/navigation';
 
 function CapabilityRow({ label, enabled }: { label: string; enabled: boolean }) {
   return (
@@ -27,7 +24,9 @@ function CapabilityRow({ label, enabled }: { label: string; enabled: boolean }) 
   );
 }
 
-export function StripeConnectPanel({ storeId }: Props) {
+export function StripeConnectPanel() {
+  const params = useParams();
+  const storeId = params.storeId as string;
   const { status, isLoading, isConnecting, error, connectStripe, refetch } =
     useStripeConnect(storeId);
 

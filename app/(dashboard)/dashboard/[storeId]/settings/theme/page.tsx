@@ -3,12 +3,12 @@ import { SettingsNav } from '@/features/settings/components/SettingsNav';
 import { ThemeSettingsForm } from '@/features/settings/components/ThemeSettingsForm';
 import { PageHeader } from '@/components/shared/PageHeader';
 
-export default function ThemeSettingsPage({ params }: { params: { storeId: string } }) {
+export default async function ThemeSettingsPage() {
   return (
     <>
       <PageHeader title="Settings" />
-      <SettingsNav storeId={params.storeId} />
-      <ThemeSettingsForm storeId={params.storeId} />
+      <SettingsNav />
+      <ThemeSettingsForm />
     </>
   );
 }

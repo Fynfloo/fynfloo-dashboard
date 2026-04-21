@@ -2,15 +2,17 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useForm, useWatch } from 'react-hook-form';
 import { useSettings } from '../hooks/useSettings';
+import { useParams } from 'next/navigation';
 
 const FONT_OPTIONS = ['Inter', 'Geist', 'DM Sans', 'Playfair Display', 'Fraunces'] as const;
 
 const RADIUS_OPTIONS = [
-  { value: '0px', label: 'Sharp' },
-  { value: '4px', label: 'Slight' },
-  { value: '8px', label: 'Rounded' },
-  { value: '12px', label: 'Extra rounded' },
+  { value: '0', label: 'Sharp' },
+  { value: '4', label: 'Slight' },
+  { value: '8', label: 'Rounded' },
+  { value: '12', label: 'Extra rounded' },
 ] as const;
 
 const BUTTON_OPTIONS = [
@@ -19,9 +21,13 @@ const BUTTON_OPTIONS = [
   { value: 'pill', label: 'Pill' },
 ] as const;
 
-interface Props {
-  storeId: string;
-}
+type Fields = {
+  primaryColour: string;
+  secondaryColour: string;
+  fontFamily: (typeof FONT_OPTIONS)[number];
+  borderRadius: (typeof RADIUS_OPTIONS)[number]['value'];
+  buttonStyle: (typeof BUTTON_OPTIONS)[number]['value'];
+};
 
 function SegmentedControl<T extends string>({
   options,
@@ -56,35 +62,43 @@ function SegmentedControl<T extends string>({
   );
 }
 
-export function ThemeSettingsForm({ storeId }: Props) {
+export function ThemeSettingsForm() {
+  const params = useParams();
+  const storeId = params.storeId as string;
   const { settings, isLoading, isSaving, error, saveTheme } = useSettings(storeId);
-
-  const [primaryColour, setPrimaryColour] = useState('#000000');
-  const [secondaryColour, setSecondaryColour] = useState('#ffffff');
-  const [fontFamily, setFontFamily] = useState<string>('Inter');
-  const [borderRadius, setBorderRadius] = useState('8px');
-  const [buttonStyle, setButtonStyle] = useState('filled');
   const [saved, setSaved] = useState(false);
+
+  const form = useForm<Fields>({
+    defaultValues: {
+      primaryColour: '#000000',
+      secondaryColour: '#ffffff',
+      fontFamily: 'Inter',
+      borderRadius: '4',
+      buttonStyle: 'filled',
+    },
+  });
+
+  const primaryColour = useWatch({ control: form.control, name: 'primaryColour' });
+  const secondaryColour = useWatch({ control: form.control, name: 'secondaryColour' });
+  const fontFamily = useWatch({ control: form.control, name: 'fontFamily' });
+  const borderRadius = useWatch({ control: form.control, name: 'borderRadius' });
+  const buttonStyle = useWatch({ control: form.control, name: 'buttonStyle' });
 
   useEffect(() => {
     if (settings?.themeSettings) {
-      const t = settings.themeSettings as Record<string, string>;
-      if (t.primaryColour) setPrimaryColour(t.primaryColour);
-      if (t.secondaryColour) setSecondaryColour(t.secondaryColour);
-      if (t.fontFamily) setFontFamily(t.fontFamily);
-      if (t.borderRadius) setBorderRadius(t.borderRadius);
-      if (t.buttonStyle) setButtonStyle(t.buttonStyle);
+      const t = settings.themeSettings as Partial<Fields>;
+      form.reset({
+        primaryColour: t.primaryColour ?? '#000000',
+        secondaryColour: t.secondaryColour ?? '#ffffff',
+        fontFamily: t.fontFamily ?? 'Inter',
+        borderRadius: t.borderRadius ?? '8',
+        buttonStyle: t.buttonStyle ?? 'filled',
+      });
     }
-  }, [settings]);
+  }, [settings, form]);
 
-  async function handleSave() {
-    const ok = await saveTheme({
-      primaryColour,
-      secondaryColour,
-      fontFamily,
-      borderRadius,
-      buttonStyle,
-    });
+  async function handleSave(data: Fields) {
+    const ok = await saveTheme(data);
     if (ok) {
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
@@ -131,7 +145,7 @@ export function ThemeSettingsForm({ storeId }: Props) {
             <input
               type="color"
               value={primaryColour}
-              onChange={(e) => setPrimaryColour(e.target.value)}
+              onChange={(e) => form.setValue('primaryColour', e.target.value)}
               className="w-10 h-10 rounded-[var(--radius-md)] cursor-pointer p-0.5"
               style={{
                 background: 'var(--bg-elevated)',
@@ -140,7 +154,7 @@ export function ThemeSettingsForm({ storeId }: Props) {
             />
             <input
               value={primaryColour}
-              onChange={(e) => setPrimaryColour(e.target.value)}
+              onChange={(e) => form.setValue('primaryColour', e.target.value)}
               className="flex-1 px-3 py-2 rounded-[var(--radius-md)] text-sm font-mono outline-none"
               style={{
                 background: 'var(--bg-elevated)',
@@ -162,7 +176,7 @@ export function ThemeSettingsForm({ storeId }: Props) {
             <input
               type="color"
               value={secondaryColour}
-              onChange={(e) => setSecondaryColour(e.target.value)}
+              onChange={(e) => form.setValue('secondaryColour', e.target.value)}
               className="w-10 h-10 rounded-[var(--radius-md)] cursor-pointer p-0.5"
               style={{
                 background: 'var(--bg-elevated)',
@@ -171,7 +185,7 @@ export function ThemeSettingsForm({ storeId }: Props) {
             />
             <input
               value={secondaryColour}
-              onChange={(e) => setSecondaryColour(e.target.value)}
+              onChange={(e) => form.setValue('secondaryColour', e.target.value)}
               className="flex-1 px-3 py-2 rounded-[var(--radius-md)] text-sm font-mono outline-none"
               style={{
                 background: 'var(--bg-elevated)',
@@ -191,7 +205,7 @@ export function ThemeSettingsForm({ storeId }: Props) {
           </label>
           <select
             value={fontFamily}
-            onChange={(e) => setFontFamily(e.target.value)}
+            onChange={(e) => form.setValue('fontFamily', e.target.value as Fields['fontFamily'])}
             className="w-full px-3 py-2 rounded-[var(--radius-md)] text-sm outline-none"
             style={{
               background: 'var(--bg-elevated)',
@@ -214,8 +228,8 @@ export function ThemeSettingsForm({ storeId }: Props) {
           </label>
           <SegmentedControl
             options={RADIUS_OPTIONS}
-            value={borderRadius as any}
-            onChange={setBorderRadius}
+            value={borderRadius}
+            onChange={(value) => form.setValue('borderRadius', value)}
           />
         </div>
 
@@ -226,14 +240,14 @@ export function ThemeSettingsForm({ storeId }: Props) {
           </label>
           <SegmentedControl
             options={BUTTON_OPTIONS}
-            value={buttonStyle as any}
-            onChange={setButtonStyle}
+            value={buttonStyle}
+            onChange={(value) => form.setValue('buttonStyle', value)}
           />
         </div>
 
         <div className="flex items-center gap-3 pt-2">
           <button
-            onClick={handleSave}
+            onClick={form.handleSubmit(handleSave)}
             disabled={isSaving}
             className="px-4 py-2 rounded-[var(--radius-md)] text-sm font-medium transition-opacity"
             style={{
@@ -284,7 +298,7 @@ export function ThemeSettingsForm({ storeId }: Props) {
               background: buttonStyle === 'outline' ? 'transparent' : primaryColour,
               color: buttonStyle === 'outline' ? primaryColour : secondaryColour,
               border: `2px solid ${primaryColour}`,
-              borderRadius: buttonStyle === 'pill' ? '9999px' : borderRadius,
+              borderRadius: buttonStyle === 'pill' ? '9999px' : `${borderRadius}px`,
             }}
           >
             Add to cart

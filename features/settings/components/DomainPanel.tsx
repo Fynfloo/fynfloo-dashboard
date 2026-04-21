@@ -3,12 +3,11 @@
 
 import { Globe } from 'lucide-react';
 import { useSettings } from '../hooks/useSettings';
+import { useParams } from 'next/navigation';
 
-interface Props {
-  storeId: string;
-}
-
-export function DomainPanel({ storeId }: Props) {
+export function DomainPanel() {
+  const params = useParams();
+  const storeId = params.storeId as string;
   const { settings, isLoading } = useSettings(storeId);
 
   return (
