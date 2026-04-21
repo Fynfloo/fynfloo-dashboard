@@ -5,6 +5,7 @@ import { Menu } from 'lucide-react';
 import { useUiStore } from '@/store/ui.store';
 import { UserMenu } from './UserMenu';
 import { MfaNudgeBanner } from './MfaNudgeBanner';
+import { StripeConnectNudgeBanner } from './StripeConnectNudgeBanner';
 
 export function Header() {
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
@@ -39,6 +40,7 @@ export function Header() {
         <UserMenu />
       </header>
       <MfaNudgeBanner />
+      <StripeConnectNudgeBanner />
     </div>
   );
 }

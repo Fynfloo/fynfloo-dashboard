@@ -18,11 +18,14 @@ export type MeResponse = {
 };
 
 // Shape returned by GET /api/stores (from tenant.service.ts listUserStores)
+// stripeChargesEnabled — DB-backed fast check used for the nudge banner.
+// For live status call GET /api/payments/dashboard/:tenantId/connect-status.
 export type Store = {
   id: string;
   name: string;
   subdomain: string;
   currency: string;
+  stripeChargesEnabled: boolean;
 };
 
 export type StoresResponse = {
@@ -403,3 +406,64 @@ export interface CustomerListResponse {
   limit: number;
   pages: number;
 }
+
+// ─── Settings ─────────────────────────────────────────────────────────────────
+
+export type StoreSettings = {
+  id: string;
+  name: string;
+  slug: string;
+  email: string | null;
+  phone: string | null;
+  logoUrl: string | null;
+  currency: string;
+  timezone: string;
+  domain: string | null;
+  status: string;
+  businessType: string | null;
+  templateKey: string | null;
+  themeSettings: Record<string, unknown> | null;
+  stripeAccountId: string | null;
+  stripeChargesEnabled: boolean;
+};
+
+export type UpdateSettingsInput = {
+  name?: string;
+  email?: string;
+  phone?: string;
+  logoUrl?: string;
+  timezone?: string;
+};
+
+export type UpdateThemeInput = {
+  themeSettings: Record<string, unknown>;
+};
+
+export type ThemeSettings = {
+  primaryColour?: string;
+  secondaryColour?: string;
+  fontFamily?: string;
+  borderRadius?: string;
+  buttonStyle?: string;
+  [key: string]: unknown;
+};
+
+// ─── Stripe Connect ───────────────────────────────────────────────────────────
+
+// Discriminated union — narrow on connected before accessing capability fields.
+// connected: false — no stripeAccountId stored, merchant has never connected.
+// connected: true  — stripeAccountId exists, live Stripe status fields populated.
+//
+// Two-layer status model:
+//   Layer 1: Store.stripeChargesEnabled — DB-backed, zero API calls, for nudge banner.
+//   Layer 2: StripeConnectStatus — live Stripe API call, for payments settings page.
+export type StripeConnectStatus =
+  | { connected: false }
+  | {
+      connected: true;
+      id: string;
+      chargesEnabled: boolean;
+      payoutsEnabled: boolean;
+      detailsSubmitted: boolean;
+      requirements?: unknown[];
+    };

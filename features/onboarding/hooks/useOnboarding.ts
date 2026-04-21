@@ -63,6 +63,7 @@ export function useOnboarding() {
         name: data.storeName,
         subdomain: data.subdomain,
         currency: data.currency,
+        stripeChargesEnabled: false,
       };
       setStores([...stores, newStore]);
 
