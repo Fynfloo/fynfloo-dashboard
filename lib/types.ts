@@ -467,3 +467,17 @@ export type StripeConnectStatus =
       detailsSubmitted: boolean;
       requirements?: unknown[];
     };
+
+export type Session = {
+  id: string;
+  ip: string | null;
+  userAgent: string | null;
+  deviceName: string | null;
+  createdAt: string;
+  lastUsedAt: string | null;
+};
+
+export type MfaSetupData = {
+  secret: string;
+  qrCodeUrl: string;
+};
