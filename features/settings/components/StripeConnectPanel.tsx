@@ -137,6 +137,22 @@ export function StripeConnectPanel() {
                 Complete your Stripe onboarding to activate card payments.
               </p>
             )}
+
+            {/* Stripe Dashboard link — only when fully active */}
+            {chargesEnabled && (
+              <div className="pt-1 border-t" style={{ borderColor: 'var(--bg-border-subtle)' }}>
+                <a
+                  href={`https://dashboard.stripe.com/${status.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 text-xs font-medium transition-opacity hover:opacity-70"
+                  style={{ color: 'var(--text-secondary)' }}
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  Manage payouts and settings in Stripe Dashboard
+                </a>
+              </div>
+            )}
           </div>
         )}
 
