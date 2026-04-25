@@ -2,6 +2,7 @@
 
 export type TenantRole = 'TENANT_ADMIN' | 'TEAM_MEMBER';
 export type PlatformRole = 'PLATFORM_ADMIN' | 'PLATFORM_SUPPORT';
+export type TenantStatus = 'ONBOARDING' | 'ACTIVE' | 'INACTIVE' | 'SUSPENDED' | 'DEACTIVATED';
 
 export type TenantClaim = {
   tenantId: string;
@@ -419,7 +420,7 @@ export type StoreSettings = {
   currency: string;
   timezone: string;
   domain: string | null;
-  status: string;
+  status: TenantStatus;
   businessType: string | null;
   templateKey: string | null;
   themeSettings: Record<string, unknown> | null;
@@ -433,6 +434,7 @@ export type UpdateSettingsInput = {
   phone?: string;
   logoUrl?: string;
   timezone?: string;
+  status?: 'ACTIVE' | 'INACTIVE';
 };
 
 export type UpdateThemeInput = {

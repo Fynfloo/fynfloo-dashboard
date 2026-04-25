@@ -122,7 +122,16 @@ export function useSettings(tenantId: string) {
     }
   }
 
-  return { settings, isLoading, isSaving, error, saveSettings, saveTheme, refetch: fetchSettings };
+  return {
+    settings,
+    isLoading,
+    isSaving,
+    error,
+    saveSettings,
+    saveTheme,
+    refetch: fetchSettings,
+    setSettings,
+  };
 }
 
 // ─── useStripeConnect ─────────────────────────────────────────────────────────
