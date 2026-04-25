@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/store/auth.store';
 import type { StoreSettings, UpdateSettingsInput, StripeConnectStatus } from '@/lib/types';
-import { apiRequest } from '@/lib/api';
+import { apiRequest, getAccessToken } from '@/lib/api';
 
 // ─── API functions ────────────────────────────────────────────────────────────
 
@@ -242,4 +242,36 @@ export function useStripeConnect(tenantId: string) {
     connectStripe,
     refetch: fetchStatus,
   };
+}
+
+export async function uploadLogo(tenantId: string, file: File): Promise<StoreSettings> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const token = getAccessToken();
+  const res = await fetch(
+    `${process.env.NEXT_PUBLIC_API_URL}/api/tenant/${tenantId}/settings/logo`,
+    {
+      method: 'POST',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        Accept: 'application/json',
+      },
+      credentials: 'include',
+      body: formData,
+    },
+  );
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Upload failed' }));
+    throw new Error(err.error ?? 'Upload failed');
+  }
+
+  return res.json();
+}
+
+export async function deleteLogo(tenantId: string): Promise<StoreSettings> {
+  return apiRequest<StoreSettings>(`/api/tenant/${tenantId}/settings/logo`, {
+    method: 'DELETE',
+  });
 }

@@ -7,6 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { updateStoreSettings, useSettings } from '../hooks/useSettings';
 import { useParams } from 'next/navigation';
+import { LogoUpload } from './LogoUpload';
 
 const schema = z.object({
   name: z.string().min(1, 'Store name is required').max(255),
@@ -176,6 +177,14 @@ export function GeneralSettingsForm() {
           value={name}
           onChange={(v) => form.setValue('name', v)}
           placeholder="My Store"
+        />
+      </Field>
+
+      <Field label="Logo">
+        <LogoUpload
+          tenantId={storeId}
+          settings={settings!}
+          onUpdate={(updated) => setSettings(updated)}
         />
       </Field>
 
