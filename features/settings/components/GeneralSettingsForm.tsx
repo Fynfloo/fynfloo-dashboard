@@ -5,8 +5,9 @@ import { useState, useEffect, useRef } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useSettings } from '../hooks/useSettings';
+import { updateStoreSettings, useSettings } from '../hooks/useSettings';
 import { useParams } from 'next/navigation';
+import { LogoUpload } from './LogoUpload';
 
 const schema = z.object({
   name: z.string().min(1, 'Store name is required').max(255),
@@ -85,7 +86,8 @@ function TextInput({
 export function GeneralSettingsForm() {
   const params = useParams();
   const storeId = params.storeId as string;
-  const { settings, isLoading, isSaving, error, saveSettings } = useSettings(storeId);
+  const { settings, isLoading, isSaving, error, saveSettings, setSettings } = useSettings(storeId);
+  const [isTogglingStatus, setIsTogglingStatus] = useState(false);
   const [saved, setSaved] = useState(false);
   const loadedRef = useRef(false);
 
@@ -118,6 +120,20 @@ export function GeneralSettingsForm() {
     if (ok) {
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
+    }
+  }
+
+  async function handleToggleStatus() {
+    if (!settings) return;
+    const newStatus = settings.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+    setIsTogglingStatus(true);
+    try {
+      const updated = await updateStoreSettings(storeId, { status: newStatus });
+      setSettings(updated);
+    } catch {
+      // silent — useSettings error state handles display
+    } finally {
+      setIsTogglingStatus(false);
     }
   }
 
@@ -161,6 +177,14 @@ export function GeneralSettingsForm() {
           value={name}
           onChange={(v) => form.setValue('name', v)}
           placeholder="My Store"
+        />
+      </Field>
+
+      <Field label="Logo">
+        <LogoUpload
+          tenantId={storeId}
+          settings={settings!}
+          onUpdate={(updated) => setSettings(updated)}
         />
       </Field>
 
@@ -237,6 +261,45 @@ export function GeneralSettingsForm() {
           placeholder="+44 20 1234 5678"
         />
       </Field>
+
+      {/* Store status */}
+      <div
+        className="flex items-center justify-between px-4 py-3 rounded-[var(--radius-md)]"
+        style={{
+          background: 'var(--bg-elevated)',
+          border: '1px solid var(--bg-border-subtle)',
+        }}
+      >
+        <div>
+          <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+            {settings?.status === 'ACTIVE' ? 'Store is live' : 'Store is offline'}
+          </p>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
+            {settings?.status === 'ACTIVE'
+              ? 'Your store is visible to customers.'
+              : 'Customers see a coming soon page.'}
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleToggleStatus}
+          disabled={isTogglingStatus}
+          className="relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors duration-200"
+          style={{
+            background: settings?.status === 'ACTIVE' ? 'var(--green)' : 'var(--bg-border-subtle)',
+            opacity: isTogglingStatus ? 0.6 : 1,
+            cursor: isTogglingStatus ? 'not-allowed' : 'pointer',
+          }}
+        >
+          <span
+            className="inline-block h-5 w-5 rounded-full bg-white shadow transition-transform duration-200 mt-0.5"
+            style={{
+              transform: settings?.status === 'ACTIVE' ? 'translateX(22px)' : 'translateX(2px)',
+            }}
+          />
+        </button>
+      </div>
 
       <div className="flex items-center gap-3 pt-2">
         <button
