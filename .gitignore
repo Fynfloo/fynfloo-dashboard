@@ -42,3 +42,5 @@ next-env.d.ts
 
 test-results
 report
+CLAUDE.md
+.husky/_

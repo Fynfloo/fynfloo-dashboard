@@ -1,0 +1,38 @@
+#!/bin/bash
+
+echo ""
+echo "Running pre-commit checks..."
+echo ""
+
+echo "Checking TypeScript build..."
+npm run build --silent 2>/dev/null
+if [ $? -ne 0 ]; then
+  echo ""
+  echo "✗ Build failed — commit blocked"
+  echo "  Run: npm run build to see errors"
+  echo ""
+  exit 1
+fi
+echo "✓ Build passing"
+
+echo "Checking for console.log..."
+LOGS=$(grep -rn "console\.log(" src/ --include="*.ts" --include="*.tsx" \
+  --exclude-dir=node_modules \
+  | grep -v "\.test\." \
+  | grep -v "\.spec\." \
+  | grep -v ":[[:space:]]*//" \
+  | grep -v "transports\.Console" \
+  || true)
+if [ -n "$LOGS" ]; then
+  echo ""
+  echo "⚠ console.log found in production code:"
+  echo "$LOGS" | head -5
+  echo ""
+  echo "Remove console.log before committing"
+  exit 1
+fi
+echo "✓ No console.log in production code"
+
+echo ""
+echo "✓ All checks passed — committing"
+echo ""
