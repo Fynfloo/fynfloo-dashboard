@@ -197,9 +197,47 @@ function parseLinks(text: string): StorefrontLink[] {
     .filter((link) => link.label);
 }
 
+function formatLinkHref(link: StorefrontLink): string | null {
+  if (link.href) return link.href;
+  if (!link.target) return null;
+
+  switch (link.target.type) {
+    case 'path':
+    case 'contentPage':
+      return link.target.path;
+    case 'systemPage': {
+      const systemPaths: Record<string, string> = {
+        home: '/',
+        products: '/products',
+        cart: '/cart',
+        'account.login': '/account/login',
+        'account.signup': '/account/signup',
+        'account.orders': '/account/orders',
+        'account.profile': '/account/profile',
+        'checkout.success': '/checkout/success',
+      };
+
+      return systemPaths[link.target.page] ?? null;
+    }
+    case 'product':
+      return `/products/${link.target.handle}`;
+    case 'collection':
+      return `/collections/${link.target.handle}`;
+    case 'external':
+      return link.target.url;
+    case 'email':
+      return `mailto:${link.target.email}`;
+    case 'phone':
+      return `tel:${link.target.phone}`;
+  }
+}
+
 function stringifyLinks(links: StorefrontLink[] | undefined): string {
   return (links ?? [])
-    .map((link) => (link.href ? `${link.label} | ${link.href}` : link.label))
+    .map((link) => {
+      const href = formatLinkHref(link);
+      return href ? `${link.label} | ${href}` : link.label;
+    })
     .join('\n');
 }
 
