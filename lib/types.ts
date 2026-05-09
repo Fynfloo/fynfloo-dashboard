@@ -450,6 +450,92 @@ export type ThemeSettings = {
   [key: string]: unknown;
 };
 
+export type StorefrontLink = {
+  label: string;
+  href: string | null;
+  external?: boolean;
+};
+
+export type SocialPlatform = 'instagram' | 'facebook' | 'x' | 'tiktok';
+
+export type SocialLink = {
+  platform: SocialPlatform;
+  href: string;
+};
+
+export type RegionKey = 'announcement' | 'header' | 'footer' | 'legalFooter' | 'comingSoon';
+
+type RegionBlockBase<TType extends string, TData> = {
+  id: string;
+  type: TType;
+  visible?: boolean;
+  data: TData;
+};
+
+export type AnnouncementMessageBlock = RegionBlockBase<
+  'announcement.message',
+  { text: string; dismissible?: boolean }
+>;
+
+export type HeaderNavigationBlock = RegionBlockBase<
+  'header.navigation',
+  { links: StorefrontLink[] }
+>;
+
+export type FooterNewsletterBlock = RegionBlockBase<
+  'footer.newsletter',
+  { heading: string; body: string }
+>;
+
+export type FooterBrandBlock = RegionBlockBase<
+  'footer.brand',
+  { body: string; socialLinks?: SocialLink[] }
+>;
+
+export type FooterLinkGroupBlock = RegionBlockBase<
+  'footer.linkGroup',
+  { heading: string; links: StorefrontLink[] }
+>;
+
+export type LegalFooterBlock = RegionBlockBase<
+  'legal.footer',
+  { copyrightText?: string; showPaymentProvider?: boolean; showPoweredBy?: boolean }
+>;
+
+export type ComingSoonMessageBlock = RegionBlockBase<
+  'comingSoon.message',
+  {
+    eyebrow?: string;
+    title: string;
+    body: string;
+    newsletterLabel?: string;
+    poweredByLabel?: string;
+  }
+>;
+
+export type RegionBlock =
+  | AnnouncementMessageBlock
+  | HeaderNavigationBlock
+  | FooterNewsletterBlock
+  | FooterBrandBlock
+  | FooterLinkGroupBlock
+  | LegalFooterBlock
+  | ComingSoonMessageBlock;
+
+export type RegionDocument<TKey extends RegionKey = RegionKey> = {
+  key: TKey;
+  visible?: boolean;
+  blocks: RegionBlock[];
+};
+
+export type RegionMap = Partial<Record<RegionKey, RegionDocument>>;
+
+export type StorefrontRegionsState = {
+  draft: RegionMap;
+  published: RegionMap;
+  hasUnpublishedChanges: boolean;
+};
+
 // ─── Stripe Connect ───────────────────────────────────────────────────────────
 
 // Discriminated union — narrow on connected before accessing capability fields.

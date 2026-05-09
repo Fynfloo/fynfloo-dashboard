@@ -198,8 +198,19 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   }
 
   if (!res.ok) {
-    const error = await res.json().catch(() => ({ message: 'Request failed' }));
-    throw { status: res.status, message: error.message ?? 'Request failed' };
+    let message = `Request failed (${res.status})`;
+
+    try {
+      const error = await res.json();
+      message = error.message ?? error.error ?? message;
+    } catch {
+      const text = await res.text().catch(() => '');
+      if (text.trim()) {
+        message = text.trim().slice(0, 200);
+      }
+    }
+
+    throw { status: res.status, message };
   }
 
   // 204 No Content
