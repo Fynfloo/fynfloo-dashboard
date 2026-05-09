@@ -18,6 +18,7 @@ import {
 import { UserMenu } from '@/components/layout/UserMenu';
 import { useCurrentStore } from '@/hooks/useStore';
 import { StorefrontPageInspector } from '@/features/settings/components/StorefrontPageInspector';
+import { StorefrontRegionInspector } from '@/features/settings/components/StorefrontRegionInspector';
 import { buildStorefrontPreviewUrl, getDefaultStorefrontEditorSelection, resolveStorefrontPreviewState } from '@/features/settings/lib/storefrontEditor';
 import { useStorefrontPages } from '@/features/settings/hooks/useStorefrontPages';
 import { useStorefrontRegions } from '@/features/settings/hooks/useStorefrontRegions';
@@ -142,6 +143,7 @@ export function SiteEditorWorkspace() {
   const [isCreatingPage, setIsCreatingPage] = useState(false);
   const [createName, setCreateName] = useState('');
   const [createPath, setCreatePath] = useState('');
+  const [previewRefreshKey, setPreviewRefreshKey] = useState(0);
 
   const currentOrigin = useSyncExternalStore(
     subscribeToLocationOrigin,
@@ -186,6 +188,9 @@ export function SiteEditorWorkspace() {
 
     return null;
   }, [outlineGroups, selectedOutlineNodeId]);
+
+  const selectedSharedRegionKey =
+    selectedOutlineNode?.type === 'shared' ? selectedOutlineNode.regionKey : null;
 
   const previewState = useMemo(
     () =>
@@ -251,6 +256,67 @@ export function SiteEditorWorkspace() {
 
     setActivePanel(panelKey);
     setIsPanelOpen(true);
+  }
+
+  function refreshPreview() {
+    setPreviewRefreshKey((current) => current + 1);
+  }
+
+  async function handlePageSaveDraft(
+    pageId: string,
+    input: Parameters<typeof pageState.saveDraft>[1],
+  ) {
+    const result = await pageState.saveDraft(pageId, input);
+    if (result) {
+      refreshPreview();
+    }
+
+    return result;
+  }
+
+  async function handlePagePublish(pageId: string) {
+    const result = await pageState.publish(pageId);
+    if (result) {
+      refreshPreview();
+    }
+
+    return result;
+  }
+
+  async function handlePageDiscard(pageId: string) {
+    const result = await pageState.discard(pageId);
+    if (result) {
+      refreshPreview();
+    }
+
+    return result;
+  }
+
+  async function handleRegionSaveDraft(draft: Parameters<typeof regionState.saveDraft>[0]) {
+    const ok = await regionState.saveDraft(draft);
+    if (ok) {
+      refreshPreview();
+    }
+
+    return ok;
+  }
+
+  async function handleRegionPublish() {
+    const ok = await regionState.publish();
+    if (ok) {
+      refreshPreview();
+    }
+
+    return ok;
+  }
+
+  async function handleRegionDiscard() {
+    const ok = await regionState.discard();
+    if (ok) {
+      refreshPreview();
+    }
+
+    return ok;
   }
 
   function renderPagesPanel() {
@@ -531,19 +597,36 @@ export function SiteEditorWorkspace() {
           isPublishing={pageState.isPublishing}
           isDiscarding={pageState.isDiscarding}
           error={pageState.error}
-          saveDraft={pageState.saveDraft}
-          publish={pageState.publish}
-          discard={pageState.discard}
+          saveDraft={handlePageSaveDraft}
+          publish={handlePagePublish}
+          discard={handlePageDiscard}
         />
       );
     }
 
     if (activePanel === 'outline') {
+      if (selectedSharedRegionKey) {
+        return (
+          <StorefrontRegionInspector
+            regionKey={selectedSharedRegionKey}
+            regions={regionState.regions}
+            isLoading={regionState.isLoading}
+            isSaving={regionState.isSaving}
+            isPublishing={regionState.isPublishing}
+            isDiscarding={regionState.isDiscarding}
+            error={regionState.error}
+            saveDraft={handleRegionSaveDraft}
+            publish={handleRegionPublish}
+            discard={handleRegionDiscard}
+          />
+        );
+      }
+
       if (!selectedOutlineNode) {
         return (
           <EmptyStateCard
             title="Outline Inspector"
-            body="Select a node from the outline to inspect it. Shared nodes will later expose shell controls here, and template sections will expose section fields and actions."
+            body="Select a node from the outline to inspect it. Shared shell nodes now open their real controls here, and template sections will expose section fields and actions next."
           />
         );
       }
@@ -551,11 +634,7 @@ export function SiteEditorWorkspace() {
       return (
         <EmptyStateCard
           title={selectedOutlineNode.label}
-          body={
-            selectedOutlineNode.type === 'shared'
-              ? 'This is a shared shell item. In the next step, its real fields will be editable here and the change will apply across all pages.'
-              : 'This is a page section. In the next step, section fields, visibility, variant controls, and drag-and-drop actions will be edited here.'
-          }
+          body="This is a page section. In the next step, section fields, visibility, variant controls, and drag-and-drop actions will be edited here."
         />
       );
     }
@@ -847,7 +926,7 @@ export function SiteEditorWorkspace() {
                 >
                   {previewUrl.url ? (
                     <iframe
-                      key={previewUrl.url}
+                      key={`${previewUrl.url}:${previewRefreshKey}`}
                       title="Site editor preview"
                       src={previewUrl.url}
                       className="h-full w-full bg-white"

@@ -1,4 +1,5 @@
 import type {
+  RegionKey,
   RegionBlock,
   RegionMap,
   StorefrontPage,
@@ -26,13 +27,22 @@ export type SiteEditorPageGroup = {
   nodes: SiteEditorPageNode[];
 };
 
-export type SiteEditorOutlineNode = {
-  id: string;
-  label: string;
-  type: 'shared' | 'section';
-  sourceKey: string;
-  meta: string | null;
-};
+export type SiteEditorOutlineNode =
+  | {
+      id: string;
+      label: string;
+      type: 'shared';
+      sourceKey: string;
+      regionKey: RegionKey;
+      meta: string | null;
+    }
+  | {
+      id: string;
+      label: string;
+      type: 'section';
+      sourceKey: string;
+      meta: string | null;
+    };
 
 export type SiteEditorOutlineGroup = {
   id: 'header' | 'template' | 'footer';
@@ -101,6 +111,20 @@ function sharedNodeLabel(block: RegionBlock): string {
   }
 }
 
+function toSharedOutlineNode(
+  block: RegionBlock,
+  regionKey: RegionKey,
+): SiteEditorOutlineNode {
+  return {
+    id: `shared:${block.id}`,
+    label: sharedNodeLabel(block),
+    type: 'shared',
+    sourceKey: block.id,
+    regionKey,
+    meta: sharedNodeMeta(block),
+  };
+}
+
 function sectionNodeLabel(section: StorefrontSection, index: number): string {
   const rawType = section.type || 'section';
   const normalized = rawType
@@ -144,26 +168,22 @@ export function buildSiteEditorOutlineGroups(
 ): SiteEditorOutlineGroup[] {
   const draft = regionsDraft ?? {};
   const headerNodes = [
-    ...(draft.announcement?.blocks ?? []),
-    ...(draft.header?.blocks ?? []),
-  ].map<SiteEditorOutlineNode>((block) => ({
-    id: `shared:${block.id}`,
-    label: sharedNodeLabel(block),
-    type: 'shared',
-    sourceKey: block.id,
-    meta: sharedNodeMeta(block),
-  }));
+    ...(draft.announcement?.blocks ?? []).map((block) =>
+      toSharedOutlineNode(block, 'announcement'),
+    ),
+    ...(draft.header?.blocks ?? []).map((block) =>
+      toSharedOutlineNode(block, 'header'),
+    ),
+  ];
 
   const footerNodes = [
-    ...(draft.footer?.blocks ?? []),
-    ...(draft.legalFooter?.blocks ?? []),
-  ].map<SiteEditorOutlineNode>((block) => ({
-    id: `shared:${block.id}`,
-    label: sharedNodeLabel(block),
-    type: 'shared',
-    sourceKey: block.id,
-    meta: sharedNodeMeta(block),
-  }));
+    ...(draft.footer?.blocks ?? []).map((block) =>
+      toSharedOutlineNode(block, 'footer'),
+    ),
+    ...(draft.legalFooter?.blocks ?? []).map((block) =>
+      toSharedOutlineNode(block, 'legalFooter'),
+    ),
+  ];
 
   const templateNodes = (page?.draft.layout ?? []).map<SiteEditorOutlineNode>(
     (section, index) => ({

@@ -112,10 +112,26 @@ describe('site editor helpers', () => {
 
     expect(groups[0].id).toBe('header');
     expect(groups[0].nodes.map((node) => node.label)).toEqual(['Announcement Bar', 'Navigation']);
+    expect(groups[0].nodes[0]).toMatchObject({
+      type: 'shared',
+      regionKey: 'announcement',
+    });
+    expect(groups[0].nodes[1]).toMatchObject({
+      type: 'shared',
+      regionKey: 'header',
+    });
     expect(groups[1].id).toBe('template');
     expect(groups[1].nodes.map((node) => node.label)).toEqual(['Hero Basic', 'Cta Banner']);
     expect(groups[1].nodes[1]?.meta).toBe('Hidden');
     expect(groups[2].id).toBe('footer');
     expect(groups[2].nodes.map((node) => node.label)).toEqual(['Newsletter', 'Legal Footer']);
+    expect(groups[2].nodes[0]).toMatchObject({
+      type: 'shared',
+      regionKey: 'footer',
+    });
+    expect(groups[2].nodes[1]).toMatchObject({
+      type: 'shared',
+      regionKey: 'legalFooter',
+    });
   });
 });

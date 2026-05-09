@@ -148,4 +148,21 @@ describe('SiteEditorWorkspace', () => {
       ),
     ).toBeInTheDocument();
   });
+
+  it('opens the real region inspector when a shared outline node is selected', async () => {
+    const user = userEvent.setup();
+
+    render(<SiteEditorWorkspace />);
+
+    await user.click(screen.getByRole('button', { name: 'Outline' }));
+    await user.click(screen.getByRole('button', { name: /Announcement Bar/ }));
+
+    expect(screen.getByRole('heading', { name: 'Announcement Bar' })).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Short promo text shown at the very top of the storefront shell. Shell changes apply across the storefront, so they stay beside the preview instead of living in a separate settings form.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save draft' })).toBeInTheDocument();
+  });
 });
