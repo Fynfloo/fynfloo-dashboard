@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import {
   LayoutDashboard,
+  PanelsTopLeft,
   Package,
   ShoppingBag,
   Users,
@@ -22,6 +23,7 @@ import Image from 'next/image';
 
 const ICONS: Record<string, LucideIcon> = {
   LayoutDashboard,
+  PanelsTopLeft,
   Package,
   ShoppingBag,
   Users,

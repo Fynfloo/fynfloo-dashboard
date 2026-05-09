@@ -573,6 +573,53 @@ export type StorefrontRegionsState = {
   hasUnpublishedChanges: boolean;
 };
 
+export type StorefrontSection = {
+  id?: string;
+  type: string;
+  variantKey?: string;
+  visible?: boolean;
+  data: Record<string, unknown>;
+};
+
+export type StorefrontPageVersion = {
+  layout: StorefrontSection[];
+  seoTitle: string | null;
+  seoDescription: string | null;
+};
+
+export type StorefrontPage = {
+  id: string;
+  path: string;
+  name: string | null;
+  kind: string;
+  pageClass: string;
+  isPublished: boolean;
+  draft: StorefrontPageVersion;
+  published: StorefrontPageVersion;
+  hasUnpublishedChanges: boolean;
+};
+
+export type StorefrontPagesResponse = {
+  pages: StorefrontPage[];
+};
+
+export type CreateStorefrontPageInput = {
+  name: string;
+  path: string;
+};
+
+export type UpdateStorefrontPageDraftInput = {
+  name?: string;
+  path?: string;
+  seoTitle?: string | null;
+  seoDescription?: string | null;
+  layout?: StorefrontSection[];
+};
+
+export type DiscardStorefrontPageDraftResult =
+  | { deleted: false; page: StorefrontPage }
+  | { deleted: true; pageId: string };
+
 // ─── Stripe Connect ───────────────────────────────────────────────────────────
 
 // Discriminated union — narrow on connected before accessing capability fields.

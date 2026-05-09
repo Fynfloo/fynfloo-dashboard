@@ -8,7 +8,6 @@ import { useParams } from 'next/navigation';
 const TABS = [
   { label: 'General', href: '' },
   { label: 'Theme', href: '/theme' },
-  { label: 'Storefront', href: '/storefront' },
   { label: 'Payments', href: '/payments' },
   { label: 'Shipping', href: '/shipping' },
   { label: 'Domain', href: '/domain' },

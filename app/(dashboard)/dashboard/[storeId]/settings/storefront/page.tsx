@@ -1,13 +1,12 @@
-import { PageHeader } from '@/components/shared/PageHeader';
-import { SettingsNav } from '@/features/settings/components/SettingsNav';
-import { StorefrontShellForm } from '@/features/settings/components/StorefrontShellForm';
+import { redirect } from 'next/navigation';
 
-export default function StorefrontSettingsPage() {
-  return (
-    <>
-      <PageHeader title="Settings" />
-      <SettingsNav />
-      <StorefrontShellForm />
-    </>
-  );
+type StorefrontSettingsPageProps = {
+  params: Promise<{ storeId: string }>;
+};
+
+export default async function StorefrontSettingsPage({
+  params,
+}: StorefrontSettingsPageProps) {
+  const { storeId } = await params;
+  redirect(`/dashboard/${storeId}/site`);
 }

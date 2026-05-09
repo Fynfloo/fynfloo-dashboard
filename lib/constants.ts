@@ -56,6 +56,7 @@ export function deriveGateway(currency: string): 'Stripe' | 'Paystack' {
 
 export const NAV_ITEMS = [
   { label: 'Overview', href: '', icon: 'LayoutDashboard' },
+  { label: 'Site', href: '/site', icon: 'PanelsTopLeft' },
   { label: 'Products', href: '/products', icon: 'Package' },
   { label: 'Orders', href: '/orders', icon: 'ShoppingBag' },
   { label: 'Customers', href: '/customers', icon: 'Users' },
