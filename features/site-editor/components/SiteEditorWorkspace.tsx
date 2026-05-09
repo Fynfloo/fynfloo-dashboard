@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import type { FormEvent } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -13,6 +13,7 @@ import {
   LayoutTemplate,
   ListTree,
   Palette,
+  X,
 } from 'lucide-react';
 import { UserMenu } from '@/components/layout/UserMenu';
 import { useCurrentStore } from '@/hooks/useStore';
@@ -73,11 +74,15 @@ const PANELS: Array<{
 
 function PanelButton({
   active,
+  controlsId,
+  expanded,
   icon: Icon,
   label,
   onClick,
 }: {
   active: boolean;
+  controlsId: string;
+  expanded: boolean;
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   onClick: () => void;
@@ -85,6 +90,8 @@ function PanelButton({
   return (
     <button
       type="button"
+      aria-controls={controlsId}
+      aria-expanded={expanded}
       onClick={onClick}
       className="flex w-full flex-col items-center gap-2 rounded-[var(--radius-md)] px-2 py-3 text-[11px] font-medium transition-colors"
       style={{
@@ -128,6 +135,8 @@ export function SiteEditorWorkspace() {
   const regionState = useStorefrontRegions(storeId);
 
   const [activePanel, setActivePanel] = useState<SiteEditorPanelKey>('pages');
+  const [isPanelOpen, setIsPanelOpen] = useState(true);
+  const [isPanelPinned, setIsPanelPinned] = useState(false);
   const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
   const [selectedOutlineNodeId, setSelectedOutlineNodeId] = useState<string | null>(null);
   const [isCreatingPage, setIsCreatingPage] = useState(false);
@@ -200,6 +209,24 @@ export function SiteEditorWorkspace() {
     [currentOrigin, currentStore?.subdomain, previewState.path],
   );
 
+  useEffect(() => {
+    if (!isPanelOpen || isPanelPinned) return;
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setIsPanelOpen(false);
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isPanelOpen, isPanelPinned]);
+
+  const activePanelMeta = useMemo(
+    () => PANELS.find((panel) => panel.key === activePanel) ?? PANELS[0],
+    [activePanel],
+  );
+
   async function handleCreatePage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const page = await pageState.createPage({
@@ -214,6 +241,16 @@ export function SiteEditorWorkspace() {
     setIsCreatingPage(false);
     setSelectedPageId(page.id);
     setActivePanel('pages');
+  }
+
+  function handlePanelButtonClick(panelKey: SiteEditorPanelKey) {
+    if (panelKey === activePanel) {
+      setIsPanelOpen((current) => !current);
+      return;
+    }
+
+    setActivePanel(panelKey);
+    setIsPanelOpen(true);
   }
 
   function renderPagesPanel() {
@@ -615,102 +652,223 @@ export function SiteEditorWorkspace() {
             <PanelButton
               key={panel.key}
               active={panel.key === activePanel}
+              controlsId={`${panel.key}-panel`}
+              expanded={panel.key === activePanel && isPanelOpen}
               icon={panel.icon}
               label={panel.label}
-              onClick={() => setActivePanel(panel.key)}
+              onClick={() => handlePanelButtonClick(panel.key)}
             />
           ))}
         </aside>
 
-        <section
-          className="w-[340px] shrink-0 overflow-y-auto px-5 py-5"
-          style={{
-            background: 'var(--bg-base)',
-            borderRight: '1px solid var(--bg-border-subtle)',
-          }}
-        >
-          {renderLeftPanel()}
-        </section>
-
-        <main className="min-w-0 flex-1 overflow-hidden p-5" style={{ background: 'var(--bg-base)' }}>
-          <div
-            className="flex h-full flex-col overflow-hidden rounded-[var(--radius-xl)]"
-            style={{ border: '1px solid var(--bg-border-subtle)', background: 'var(--bg-surface)' }}
-          >
-            <div
-              className="flex items-center justify-between gap-3 px-4 py-3"
-              style={{ borderBottom: '1px solid var(--bg-border-subtle)' }}
+        <div className="relative min-w-0 flex-1 flex">
+          {isPanelOpen && isPanelPinned && (
+            <section
+              id={`${activePanelMeta.key}-panel`}
+              aria-label={`${activePanelMeta.label} panel`}
+              className="w-[340px] shrink-0 overflow-hidden"
+              style={{
+                background: 'var(--bg-base)',
+                borderRight: '1px solid var(--bg-border-subtle)',
+              }}
             >
-              <div>
-                <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-                  Preview
-                </div>
-                <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                  Real storefront iframe inside the new Site editor layout
-                </div>
-              </div>
-              <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                {previewState.title}
-              </div>
-            </div>
-
-            {(previewState.reason || previewUrl.note) && (
-              <div className="space-y-2 px-4 pt-4">
-                {previewState.reason && (
-                  <div
-                    className="rounded-[var(--radius-md)] border px-4 py-3 text-sm"
-                    style={{
-                      borderColor: 'rgba(245, 158, 11, 0.25)',
-                      background: 'rgba(245, 158, 11, 0.08)',
-                      color: 'var(--text-primary)',
-                    }}
-                  >
-                    {previewState.reason}
-                  </div>
-                )}
-                {previewUrl.note && (
-                  <div
-                    className="rounded-[var(--radius-md)] border px-4 py-3 text-sm"
-                    style={{
-                      borderColor: 'var(--bg-border-subtle)',
-                      background: 'var(--bg-elevated)',
-                      color: 'var(--text-secondary)',
-                    }}
-                  >
-                    {previewUrl.note}
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div className="min-h-0 flex-1 p-4">
-              <div
-                className="h-full overflow-hidden rounded-[var(--radius-lg)]"
-                style={{ border: '1px solid var(--bg-border-subtle)', background: 'var(--bg-elevated)' }}
-              >
-                {previewUrl.url ? (
-                  <iframe
-                    key={previewUrl.url}
-                    title="Site editor preview"
-                    src={previewUrl.url}
-                    className="h-full w-full bg-white"
-                  />
-                ) : (
-                  <div className="flex h-full items-center justify-center px-8 text-center">
-                    <div className="max-w-md space-y-3">
-                      <div className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
-                        Preview not configured yet
-                      </div>
-                      <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                        Set <code>NEXT_PUBLIC_STOREFRONT_EDITOR_ORIGIN</code> to your running storefront origin, for example <code>http://{'{subdomain}'}.localhost:3001</code>, and this workspace will use the real storefront renderer here.
-                      </p>
+              <div className="flex h-full flex-col">
+                <div
+                  className="flex items-center justify-between gap-3 px-5 py-4"
+                  style={{
+                    background: 'var(--bg-surface)',
+                    borderBottom: '1px solid var(--bg-border-subtle)',
+                  }}
+                >
+                  <div className="space-y-1">
+                    <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                      {activePanelMeta.label}
+                    </div>
+                    <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                      Pinned panel
                     </div>
                   </div>
-                )}
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      aria-label="Unpin panel"
+                      onClick={() => setIsPanelPinned(false)}
+                      className="rounded-[var(--radius-md)] px-2.5 py-2 text-xs font-medium"
+                      style={{
+                        border: '1px solid var(--bg-border-subtle)',
+                        color: 'var(--text-secondary)',
+                      }}
+                    >
+                      Unpin
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Close panel"
+                      onClick={() => setIsPanelOpen(false)}
+                      className="rounded-[var(--radius-md)] p-2"
+                      style={{
+                        border: '1px solid var(--bg-border-subtle)',
+                        color: 'var(--text-secondary)',
+                      }}
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto px-5 py-5">{renderLeftPanel()}</div>
+              </div>
+            </section>
+          )}
+
+          <main className="relative min-w-0 flex-1 overflow-hidden p-5" style={{ background: 'var(--bg-base)' }}>
+            {!isPanelPinned && isPanelOpen && (
+              <>
+                <button
+                  type="button"
+                  aria-label="Close overlay panel"
+                  className="absolute inset-0 z-10 cursor-default"
+                  style={{ background: 'rgba(13, 13, 26, 0.08)' }}
+                  onClick={() => setIsPanelOpen(false)}
+                />
+
+                <section
+                  id={`${activePanelMeta.key}-panel`}
+                  aria-label={`${activePanelMeta.label} panel`}
+                  className="absolute left-5 top-5 bottom-5 z-20 w-[340px] overflow-hidden rounded-[var(--radius-xl)]"
+                  style={{
+                    background: 'var(--bg-surface)',
+                    border: '1px solid var(--bg-border-subtle)',
+                    boxShadow: '0 24px 60px rgba(15, 23, 42, 0.18)',
+                  }}
+                >
+                  <div className="flex h-full flex-col">
+                    <div
+                      className="flex items-center justify-between gap-3 px-5 py-4"
+                      style={{ borderBottom: '1px solid var(--bg-border-subtle)' }}
+                    >
+                      <div className="space-y-1">
+                        <div
+                          className="text-sm font-semibold"
+                          style={{ color: 'var(--text-primary)' }}
+                        >
+                          {activePanelMeta.label}
+                        </div>
+                        <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                          Overlay panel
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          aria-label="Pin panel"
+                          onClick={() => setIsPanelPinned(true)}
+                          className="rounded-[var(--radius-md)] px-2.5 py-2 text-xs font-medium"
+                          style={{
+                            border: '1px solid var(--bg-border-subtle)',
+                            color: 'var(--text-secondary)',
+                          }}
+                        >
+                          Pin
+                        </button>
+                        <button
+                          type="button"
+                          aria-label="Close panel"
+                          onClick={() => setIsPanelOpen(false)}
+                          className="rounded-[var(--radius-md)] p-2"
+                          style={{
+                            border: '1px solid var(--bg-border-subtle)',
+                            color: 'var(--text-secondary)',
+                          }}
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex-1 overflow-y-auto px-5 py-5">{renderLeftPanel()}</div>
+                  </div>
+                </section>
+              </>
+            )}
+
+            <div
+              className="flex h-full flex-col overflow-hidden rounded-[var(--radius-xl)]"
+              style={{ border: '1px solid var(--bg-border-subtle)', background: 'var(--bg-surface)' }}
+            >
+              <div
+                className="flex items-center justify-between gap-3 px-4 py-3"
+                style={{ borderBottom: '1px solid var(--bg-border-subtle)' }}
+              >
+                <div>
+                  <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                    Preview
+                  </div>
+                  <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                    Real storefront iframe inside the new Site editor layout
+                  </div>
+                </div>
+                <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                  {previewState.title}
+                </div>
+              </div>
+
+              {(previewState.reason || previewUrl.note) && (
+                <div className="space-y-2 px-4 pt-4">
+                  {previewState.reason && (
+                    <div
+                      className="rounded-[var(--radius-md)] border px-4 py-3 text-sm"
+                      style={{
+                        borderColor: 'rgba(245, 158, 11, 0.25)',
+                        background: 'rgba(245, 158, 11, 0.08)',
+                        color: 'var(--text-primary)',
+                      }}
+                    >
+                      {previewState.reason}
+                    </div>
+                  )}
+                  {previewUrl.note && (
+                    <div
+                      className="rounded-[var(--radius-md)] border px-4 py-3 text-sm"
+                      style={{
+                        borderColor: 'var(--bg-border-subtle)',
+                        background: 'var(--bg-elevated)',
+                        color: 'var(--text-secondary)',
+                      }}
+                    >
+                      {previewUrl.note}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="min-h-0 flex-1 p-4">
+                <div
+                  className="h-full overflow-hidden rounded-[var(--radius-lg)]"
+                  style={{ border: '1px solid var(--bg-border-subtle)', background: 'var(--bg-elevated)' }}
+                >
+                  {previewUrl.url ? (
+                    <iframe
+                      key={previewUrl.url}
+                      title="Site editor preview"
+                      src={previewUrl.url}
+                      className="h-full w-full bg-white"
+                    />
+                  ) : (
+                    <div className="flex h-full items-center justify-center px-8 text-center">
+                      <div className="max-w-md space-y-3">
+                        <div className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
+                          Preview not configured yet
+                        </div>
+                        <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                          Set <code>NEXT_PUBLIC_STOREFRONT_EDITOR_ORIGIN</code> to your running storefront origin, for example <code>http://{'{subdomain}'}.localhost:3001</code>, and this workspace will use the real storefront renderer here.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        </main>
+          </main>
+        </div>
 
         <aside
           className="w-[360px] shrink-0 overflow-y-auto px-5 py-5"
