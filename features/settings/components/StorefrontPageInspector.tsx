@@ -75,6 +75,7 @@ type StorefrontPageInspectorProps = {
   ) => Promise<StorefrontPage | null>;
   publish: (pageId: string) => Promise<StorefrontPage | null>;
   discard: (pageId: string) => Promise<{ deleted: false; page: StorefrontPage } | { deleted: true; pageId: string } | null>;
+  onDirtyChange?: (hasUnsavedChanges: boolean) => void;
 };
 
 export function StorefrontPageInspector({
@@ -87,6 +88,7 @@ export function StorefrontPageInspector({
   saveDraft,
   publish,
   discard,
+  onDirtyChange,
 }: StorefrontPageInspectorProps) {
   const [draft, setDraft] = useState<DraftFields>(EMPTY_DRAFT);
 
@@ -96,6 +98,11 @@ export function StorefrontPageInspector({
 
   const baseDraft = useMemo(() => toDraftFields(page), [page]);
   const hasUnsavedChanges = serializeDraft(draft) !== serializeDraft(baseDraft);
+
+  useEffect(() => {
+    onDirtyChange?.(hasUnsavedChanges);
+    return () => onDirtyChange?.(false);
+  }, [hasUnsavedChanges, onDirtyChange]);
 
   async function handleSaveDraft() {
     if (!page) return;
@@ -168,7 +175,7 @@ export function StorefrontPageInspector({
               </h2>
             </div>
             <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-              Page routing and draft metadata live here now so the visual section editor can plug into the same page record next.
+              Update page details, search snippets, and publishing status here.
             </p>
           </div>
           {page.isPublished ? (

@@ -2,16 +2,17 @@
 
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import type { FormEvent } from 'react';
-import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import {
+  AlertTriangle,
   ArrowLeft,
+  ChevronDown,
+  ChevronRight,
   ExternalLink,
   FilePlus2,
   Files,
-  FolderTree,
+  Layers3,
   LayoutTemplate,
-  ListTree,
   Palette,
   X,
 } from 'lucide-react';
@@ -25,11 +26,16 @@ import { buildStorefrontPreviewUrl, getDefaultStorefrontEditorSelection, resolve
 import { useStorefrontPages } from '@/features/settings/hooks/useStorefrontPages';
 import { useStorefrontRegions } from '@/features/settings/hooks/useStorefrontRegions';
 import {
-  buildSiteEditorOutlineGroups,
-  buildSiteEditorPageGroups,
+  buildSiteEditorNavigatorPages,
+  buildSiteEditorSiteWideNodes,
+  getSelectedSiteEditorSection,
+  type SiteEditorNavigatorPageNode,
+  type SiteEditorNavigatorSharedNode,
   type SiteEditorOutlineNode,
   type SiteEditorPanelKey,
 } from '../lib/siteEditor';
+import { applyHeroVariant, getHeroVariant, HERO_VARIANT_OPTIONS } from '../lib/sectionEditing';
+import { StorefrontSectionInspector } from './StorefrontSectionInspector';
 
 const CONFIGURED_PREVIEW_ORIGIN = process.env.NEXT_PUBLIC_STOREFRONT_EDITOR_ORIGIN;
 
@@ -80,8 +86,8 @@ const PANELS: Array<{
   label: string;
   icon: React.ComponentType<{ className?: string }>;
 }> = [
-  { key: 'pages', label: 'Pages', icon: Files },
-  { key: 'outline', label: 'Outline', icon: ListTree },
+  { key: 'navigator', label: 'Pages', icon: Files },
+  { key: 'siteWide', label: 'Shared', icon: Layers3 },
   { key: 'blocks', label: 'Blocks', icon: LayoutTemplate },
   { key: 'theme', label: 'Theme', icon: Palette },
 ];
@@ -123,7 +129,7 @@ function EmptyStateCard({
   title,
   body,
 }: {
-  title: string;
+  title?: string;
   body: string;
 }) {
   return (
@@ -131,28 +137,104 @@ function EmptyStateCard({
       className="rounded-[var(--radius-lg)] p-5"
       style={{ border: '1px solid var(--bg-border-subtle)', background: 'var(--bg-surface)' }}
     >
-      <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-        {title}
-      </h3>
-      <p className="mt-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
+      {title ? (
+        <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+          {title}
+        </h3>
+      ) : null}
+      <p
+        className={title ? 'mt-2 text-sm' : 'text-sm'}
+        style={{ color: 'var(--text-secondary)' }}
+      >
         {body}
       </p>
     </div>
   );
 }
 
+function UnsavedChangesDialog({
+  open,
+  onStay,
+  onLeave,
+}: {
+  open: boolean;
+  onStay: () => void;
+  onLeave: () => void;
+}) {
+  if (!open) {
+    return null;
+  }
+
+  return (
+    <div
+      className="absolute inset-0 z-30 flex items-center justify-center px-6"
+      style={{ background: 'rgba(15, 23, 42, 0.22)' }}
+    >
+      <div
+        className="w-full max-w-md rounded-[var(--radius-xl)] p-5 shadow-2xl"
+        style={{ background: 'var(--bg-surface)', border: '1px solid var(--bg-border-subtle)' }}
+      >
+        <div className="flex items-start gap-3">
+          <div
+            className="mt-0.5 rounded-full p-2"
+            style={{ background: 'rgba(245, 158, 11, 0.12)', color: 'rgb(180, 83, 9)' }}
+          >
+            <AlertTriangle className="h-4 w-4" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
+              Unsaved changes
+            </h2>
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+              You have changes that haven&apos;t been saved yet. Stay here to save them first, or
+              leave without saving.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-5 flex flex-wrap justify-end gap-3">
+          <button
+            type="button"
+            onClick={onStay}
+            className="rounded-[var(--radius-md)] px-4 py-2 text-sm font-medium"
+            style={{
+              border: '1px solid var(--bg-border-subtle)',
+              color: 'var(--text-secondary)',
+            }}
+          >
+            Stay here
+          </button>
+          <button
+            type="button"
+            onClick={onLeave}
+            className="rounded-[var(--radius-md)] px-4 py-2 text-sm font-medium"
+            style={{
+              background: 'var(--accent)',
+              color: 'white',
+            }}
+          >
+            Leave without saving
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function SiteEditorWorkspace() {
   const params = useParams();
+  const router = useRouter();
   const storeId = params.storeId as string;
   const currentStore = useCurrentStore();
   const pageState = useStorefrontPages(storeId);
   const regionState = useStorefrontRegions(storeId);
 
-  const [activePanel, setActivePanel] = useState<SiteEditorPanelKey>('pages');
+  const [activePanel, setActivePanel] = useState<SiteEditorPanelKey>('navigator');
   const [isPanelOpen, setIsPanelOpen] = useState(true);
   const [isPanelPinned, setIsPanelPinned] = useState(false);
   const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
   const [selectedOutlineNodeId, setSelectedOutlineNodeId] = useState<string | null>(null);
+  const [expandedPageIds, setExpandedPageIds] = useState<string[]>([]);
   const [isCreatingPage, setIsCreatingPage] = useState(false);
   const [createName, setCreateName] = useState('');
   const [createPath, setCreatePath] = useState('');
@@ -160,6 +242,9 @@ export function SiteEditorWorkspace() {
   const [previewSession, setPreviewSession] = useState<StorefrontPreviewSession | null>(null);
   const [isPreviewSessionLoading, setIsPreviewSessionLoading] = useState(false);
   const [previewSessionError, setPreviewSessionError] = useState<string | null>(null);
+  const [hasUnsavedInspectorChanges, setHasUnsavedInspectorChanges] = useState(false);
+  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+  const [isUnsavedDialogOpen, setIsUnsavedDialogOpen] = useState(false);
 
   const currentOrigin = useSyncExternalStore(
     subscribeToLocationOrigin,
@@ -202,29 +287,44 @@ export function SiteEditorWorkspace() {
     [effectivePageId, pageState.pages],
   );
 
-  const pageGroups = useMemo(
-    () => buildSiteEditorPageGroups(pageState.pages),
+  const navigatorPages = useMemo(
+    () => buildSiteEditorNavigatorPages(pageState.pages),
     [pageState.pages],
   );
 
-  const outlineGroups = useMemo(
-    () => buildSiteEditorOutlineGroups(selectedPage, regionState.regions?.draft ?? null),
-    [regionState.regions, selectedPage],
+  const siteWideNodes = useMemo(
+    () => buildSiteEditorSiteWideNodes(regionState.regions?.draft ?? null),
+    [regionState.regions],
   );
 
   const selectedOutlineNode = useMemo<SiteEditorOutlineNode | null>(() => {
     if (!selectedOutlineNodeId) return null;
 
-    for (const group of outlineGroups) {
-      const node = group.nodes.find((entry) => entry.id === selectedOutlineNodeId);
-      if (node) return node;
+    for (const node of siteWideNodes) {
+      if (node.id === selectedOutlineNodeId) {
+        return node;
+      }
+    }
+
+    for (const page of navigatorPages) {
+      const section = page.sections.find((entry) => entry.id === selectedOutlineNodeId);
+      if (section) {
+        return section;
+      }
     }
 
     return null;
-  }, [outlineGroups, selectedOutlineNodeId]);
+  }, [navigatorPages, selectedOutlineNodeId, siteWideNodes]);
 
   const selectedSharedRegionKey =
     selectedOutlineNode?.type === 'shared' ? selectedOutlineNode.regionKey : null;
+
+  const selectedPageSection = useMemo(
+    () => getSelectedSiteEditorSection(selectedPage, selectedOutlineNode),
+    [selectedOutlineNode, selectedPage],
+  );
+
+  const selectedSection = selectedPageSection?.section ?? null;
 
   const previewState = useMemo(
     () =>
@@ -285,6 +385,26 @@ export function SiteEditorWorkspace() {
   }, [loadPreviewSession, previewSession?.expiresAt]);
 
   useEffect(() => {
+    if (!effectivePageId) return;
+
+    setExpandedPageIds((current) =>
+      current.includes(effectivePageId) ? current : [effectivePageId],
+    );
+  }, [effectivePageId]);
+
+  useEffect(() => {
+    if (!hasUnsavedInspectorChanges) return;
+
+    function handleBeforeUnload(event: BeforeUnloadEvent) {
+      event.preventDefault();
+      event.returnValue = '';
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedInspectorChanges]);
+
+  useEffect(() => {
     if (!isPanelOpen || isPanelPinned) return;
 
     function handleKeyDown(event: KeyboardEvent) {
@@ -302,6 +422,29 @@ export function SiteEditorWorkspace() {
     [activePanel],
   );
 
+  function requestNavigation(action: () => void) {
+    if (hasUnsavedInspectorChanges) {
+      setPendingAction(() => action);
+      setIsUnsavedDialogOpen(true);
+      return;
+    }
+
+    action();
+  }
+
+  function handleStayWithUnsavedChanges() {
+    setPendingAction(null);
+    setIsUnsavedDialogOpen(false);
+  }
+
+  function handleLeaveWithUnsavedChanges() {
+    const action = pendingAction;
+    setPendingAction(null);
+    setIsUnsavedDialogOpen(false);
+    setHasUnsavedInspectorChanges(false);
+    action?.();
+  }
+
   async function handleCreatePage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const page = await pageState.createPage({
@@ -315,7 +458,53 @@ export function SiteEditorWorkspace() {
     setCreatePath('');
     setIsCreatingPage(false);
     setSelectedPageId(page.id);
-    setActivePanel('pages');
+    setSelectedOutlineNodeId(null);
+    setExpandedPageIds([page.id]);
+    setActivePanel('navigator');
+  }
+
+  function handleSelectPage(pageId: string) {
+    requestNavigation(() => {
+      setSelectedPageId(pageId);
+      setSelectedOutlineNodeId(null);
+      setExpandedPageIds([pageId]);
+    });
+  }
+
+  function handleSelectSharedNode(node: SiteEditorNavigatorSharedNode) {
+    requestNavigation(() => {
+      setActivePanel('siteWide');
+      setSelectedOutlineNodeId(node.id);
+    });
+  }
+
+  function handleSelectSectionNode(
+    pageNode: SiteEditorNavigatorPageNode,
+    node: Extract<SiteEditorOutlineNode, { type: 'section' }>,
+  ) {
+    requestNavigation(() => {
+      setSelectedPageId(pageNode.pageId);
+      setSelectedOutlineNodeId(node.id);
+      setExpandedPageIds([pageNode.pageId]);
+    });
+  }
+
+  function togglePageExpanded(pageId: string) {
+    setExpandedPageIds((current) => {
+      const isExpanded = current.includes(pageId);
+      if (isExpanded) {
+        const selectedSectionBelongsToPage =
+          selectedPage?.id === pageId && selectedOutlineNode?.type === 'section';
+
+        if (selectedSectionBelongsToPage) {
+          setSelectedOutlineNodeId(null);
+        }
+
+        return [];
+      }
+
+      return [pageId];
+    });
   }
 
   function handlePanelButtonClick(panelKey: SiteEditorPanelKey) {
@@ -389,11 +578,36 @@ export function SiteEditorWorkspace() {
     return ok;
   }
 
-  function renderPagesPanel() {
+  async function handleSectionSaveDraft(nextSection: NonNullable<typeof selectedSection>) {
+    if (!selectedPage || !selectedPageSection) {
+      return false;
+    }
+
+    const nextLayout = selectedPage.draft.layout.map((section, index) =>
+      index === selectedPageSection.index ? nextSection : section,
+    );
+
+    const result = await handlePageSaveDraft(selectedPage.id, {
+      layout: nextLayout,
+    });
+
+    return Boolean(result);
+  }
+
+  async function handleHeroVariantSelect(variant: ReturnType<typeof getHeroVariant>) {
+    if (!selectedSection || selectedSection.type !== 'hero.basic') {
+      return;
+    }
+
+    const nextSection = applyHeroVariant(selectedSection, variant);
+    await handleSectionSaveDraft(nextSection);
+  }
+
+  function renderNavigatorPanel() {
     return (
       <div className="space-y-5">
         <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-          Choose a page to edit or add a new one.
+          Choose a page and open the parts you want to edit.
         </p>
 
         <div className="rounded-[var(--radius-md)]" style={{ border: '1px solid var(--bg-border-subtle)', background: 'var(--bg-surface)' }}>
@@ -459,187 +673,290 @@ export function SiteEditorWorkspace() {
           )}
         </div>
 
-        <div className="space-y-4">
-          {pageGroups.map((group) => (
-            <div key={group.id} className="space-y-2">
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-tertiary)' }}>
-                  {group.label}
-                </div>
-                <p className="mt-1 text-xs" style={{ color: 'var(--text-secondary)' }}>
-                  {group.description}
-                </p>
-              </div>
+        <div
+          className="overflow-hidden rounded-[var(--radius-md)]"
+          style={{ border: '1px solid var(--bg-border-subtle)' }}
+          role="tree"
+          aria-label="Pages"
+        >
+          {navigatorPages.length === 0 ? (
+            <div className="px-4 py-4 text-sm" style={{ color: 'var(--text-secondary)' }}>
+              No pages here yet.
+            </div>
+          ) : (
+            <div className="divide-y" style={{ borderColor: 'var(--bg-border-subtle)' }}>
+              {navigatorPages.map((node) => {
+                const isSelectedPage = selectedPage?.id === node.pageId && !selectedOutlineNodeId;
+                const isExpanded = expandedPageIds.includes(node.pageId);
 
-              <div className="overflow-hidden rounded-[var(--radius-md)]" style={{ border: '1px solid var(--bg-border-subtle)' }}>
-                {group.nodes.length === 0 ? (
-                  <div className="px-4 py-4 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                    No pages here yet.
-                  </div>
-                ) : (
-                  <div className="divide-y" style={{ borderColor: 'var(--bg-border-subtle)' }}>
-                    {group.nodes.map((node) => {
-                      const selected = selectedPage?.id === node.pageId;
+                return (
+                  <div
+                    key={node.id}
+                    className="bg-[var(--bg-surface)]"
+                    role="treeitem"
+                    aria-expanded={isExpanded}
+                    aria-selected={isSelectedPage}
+                  >
+                    <div className="flex items-stretch">
+                      <button
+                        type="button"
+                        aria-label={isExpanded ? `Collapse ${node.label}` : `Expand ${node.label}`}
+                        onClick={() => togglePageExpanded(node.pageId)}
+                        className="px-3"
+                        style={{ color: 'var(--text-secondary)' }}
+                      >
+                        {isExpanded ? (
+                          <ChevronDown className="h-4 w-4" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4" />
+                        )}
+                      </button>
 
-                      return (
-                        <button
-                          key={node.id}
-                          type="button"
-                          onClick={() => {
-                            setSelectedPageId(node.pageId);
-                            setSelectedOutlineNodeId(null);
-                          }}
-                          className="w-full px-4 py-3 text-left transition-colors"
-                          style={{
-                            background: selected ? 'rgba(59, 130, 246, 0.08)' : 'var(--bg-surface)',
-                          }}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="space-y-1">
-                              <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                                {node.label}
-                              </div>
-                              <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                                {node.path}
-                              </div>
+                      <button
+                        type="button"
+                        onClick={() => handleSelectPage(node.pageId)}
+                        className="flex-1 px-4 py-3 text-left transition-colors"
+                        style={{
+                          background: isSelectedPage ? 'rgba(59, 130, 246, 0.08)' : 'var(--bg-surface)',
+                        }}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="space-y-1">
+                            <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                              {node.label}
                             </div>
-                            <div className="flex flex-col items-end gap-1">
-                              {!node.isPublished && (
-                                <span
-                                  className="rounded-full px-2 py-0.5 text-[11px] font-medium"
-                                  style={{ background: 'rgba(245, 158, 11, 0.12)', color: 'rgb(180, 83, 9)' }}
-                                >
-                                  draft only
-                                </span>
-                              )}
-                              {node.hasUnpublishedChanges && node.isPublished && (
-                                <span
-                                  className="rounded-full px-2 py-0.5 text-[11px] font-medium"
-                                  style={{ background: 'rgba(34, 197, 94, 0.12)', color: 'rgb(21, 128, 61)' }}
-                                >
-                                  draft changes
-                                </span>
-                              )}
+                            <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                              {node.path}
                             </div>
                           </div>
-                        </button>
-                      );
-                    })}
+                          <div className="flex flex-col items-end gap-1">
+                            {!node.isPublished && (
+                              <span
+                                className="rounded-full px-2 py-0.5 text-[11px] font-medium"
+                                style={{ background: 'rgba(245, 158, 11, 0.12)', color: 'rgb(180, 83, 9)' }}
+                              >
+                                draft only
+                              </span>
+                            )}
+                            {node.hasUnpublishedChanges && node.isPublished && (
+                              <span
+                                className="rounded-full px-2 py-0.5 text-[11px] font-medium"
+                                style={{ background: 'rgba(34, 197, 94, 0.12)', color: 'rgb(21, 128, 61)' }}
+                              >
+                                draft changes
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </button>
+                    </div>
+
+                    {isExpanded && (
+                      <div
+                        role="group"
+                        className="space-y-1 px-4 pb-3 pt-1"
+                        style={{ borderTop: '1px solid var(--bg-border-subtle)' }}
+                      >
+                        {node.sections.length === 0 ? (
+                          <div className="py-2 pl-8 text-sm" style={{ color: 'var(--text-secondary)' }}>
+                            No sections on this page yet.
+                          </div>
+                        ) : (
+                          node.sections.map((section) => {
+                            const isSelectedSection =
+                              selectedPage?.id === node.pageId &&
+                              section.id === selectedOutlineNodeId;
+
+                            return (
+                              <button
+                                key={`${node.pageId}:${section.id}`}
+                                type="button"
+                                role="treeitem"
+                                aria-selected={isSelectedSection}
+                                onClick={() => handleSelectSectionNode(node, section)}
+                                className="flex w-full items-center justify-between rounded-[var(--radius-md)] py-2 pl-8 pr-3 text-left transition-colors"
+                                style={{
+                                  background: isSelectedSection
+                                    ? 'rgba(59, 130, 246, 0.08)'
+                                    : 'transparent',
+                                }}
+                              >
+                                <div className="space-y-1">
+                                  <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                                    {section.label}
+                                  </div>
+                                </div>
+                                {section.meta && (
+                                  <span
+                                    className="rounded-full px-2 py-0.5 text-[11px] font-medium"
+                                    style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}
+                                  >
+                                    {section.meta}
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                );
+              })}
             </div>
-          ))}
+          )}
         </div>
       </div>
     );
   }
 
-  function renderOutlinePanel() {
+  function renderSiteWidePanel() {
     return (
       <div className="space-y-5">
         <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-          Select a section or site-wide area to edit it.
+          Edit the areas that can appear across your site.
         </p>
 
-        <div className="space-y-4">
-          {outlineGroups.map((group) => (
-            <div key={group.id} className="space-y-2">
-              <div>
-                <div className="flex items-center gap-2 text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                  <FolderTree className="h-4 w-4" />
-                  {group.label}
-                  {group.shared && (
-                    <span
-                      className="rounded-full px-2 py-0.5 text-[11px] font-medium"
-                      style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}
-                    >
-                      site-wide
-                    </span>
-                  )}
-                </div>
-                <p className="mt-1 text-xs" style={{ color: 'var(--text-secondary)' }}>
-                  {group.description}
-                </p>
-              </div>
+        <div className="space-y-3">
+          {siteWideNodes.length === 0 ? (
+            <EmptyStateCard body="There are no shared areas ready to edit yet." />
+          ) : (
+            siteWideNodes.map((node) => {
+              const isSelected = node.id === selectedOutlineNodeId;
 
-              <div className="overflow-hidden rounded-[var(--radius-md)]" style={{ border: '1px solid var(--bg-border-subtle)' }}>
-                {group.nodes.length === 0 ? (
-                  <div className="px-4 py-4 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                    {group.id === 'template'
-                      ? 'No sections on this page yet.'
-                      : 'Nothing here yet.'}
+              return (
+                <button
+                  key={node.id}
+                  type="button"
+                  onClick={() => handleSelectSharedNode(node)}
+                  className="w-full rounded-[var(--radius-lg)] p-4 text-left transition-colors"
+                  style={{
+                    background: isSelected ? 'rgba(59, 130, 246, 0.08)' : 'var(--bg-surface)',
+                    border: isSelected
+                      ? '1px solid rgba(59, 130, 246, 0.28)'
+                      : '1px solid var(--bg-border-subtle)',
+                  }}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                        {node.label}
+                      </div>
+                    </div>
+                    {node.meta ? (
+                      <span
+                        className="rounded-full px-2 py-0.5 text-[11px] font-medium"
+                        style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}
+                      >
+                        {node.meta}
+                      </span>
+                    ) : null}
                   </div>
-                ) : (
-                  <div className="divide-y" style={{ borderColor: 'var(--bg-border-subtle)' }}>
-                    {group.nodes.map((node) => {
-                      const isSelected = node.id === selectedOutlineNodeId;
-
-                      return (
-                        <button
-                          key={node.id}
-                          type="button"
-                          onClick={() => setSelectedOutlineNodeId(node.id)}
-                          className="w-full px-4 py-3 text-left transition-colors"
-                          style={{
-                            background: isSelected ? 'rgba(59, 130, 246, 0.08)' : 'var(--bg-surface)',
-                          }}
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="space-y-1">
-                              <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                                {node.label}
-                              </div>
-                              <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                                {node.type === 'shared' ? 'Site-wide item' : 'Section'}
-                              </div>
-                            </div>
-                            {node.meta && (
-                              <span
-                                className="rounded-full px-2 py-0.5 text-[11px] font-medium"
-                                style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}
-                              >
-                                {node.meta}
-                              </span>
-                            )}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
+                </button>
+              );
+            })
+          )}
         </div>
       </div>
     );
   }
 
   function renderBlocksPanel() {
+    if (selectedSharedRegionKey) {
+      return (
+        <EmptyStateCard body="Layout choices for this area will appear here as more shared layouts are added." />
+      );
+    }
+
+    if (!selectedOutlineNode || !selectedSection) {
+      return (
+        <EmptyStateCard body="Choose a section in Pages to change its layout." />
+      );
+    }
+
+    if (selectedSection.type !== 'hero.basic') {
+      return (
+        <EmptyStateCard body="Alternate layouts for this section will appear here as they are added." />
+      );
+    }
+
+    const currentVariant = getHeroVariant(selectedSection);
+
     return (
-      <EmptyStateCard
-        title="Blocks"
-        body="New blocks for this page will appear here."
-      />
+      <div className="space-y-4">
+        <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+          Choose the hero layout that best fits this page.
+        </p>
+
+        <div className="space-y-3">
+          {HERO_VARIANT_OPTIONS.map((option) => {
+            const selected = currentVariant === option.key;
+
+            return (
+              <div
+                key={option.key}
+                className="rounded-[var(--radius-lg)] p-4"
+                style={{
+                  border: selected
+                    ? '1px solid rgba(59, 130, 246, 0.45)'
+                    : '1px solid var(--bg-border-subtle)',
+                  background: selected
+                    ? 'rgba(59, 130, 246, 0.08)'
+                    : 'var(--bg-surface)',
+                }}
+              >
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                      {option.label}
+                    </div>
+                    {selected && (
+                      <span
+                        className="rounded-full px-2 py-0.5 text-[11px] font-medium"
+                        style={{ background: 'var(--bg-elevated)', color: 'var(--accent)' }}
+                      >
+                        current
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                    {option.description}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => void handleHeroVariantSelect(option.key)}
+                  disabled={pageState.isSaving || selected}
+                  className="mt-4 inline-flex items-center rounded-[var(--radius-md)] px-3 py-2 text-sm font-medium"
+                  style={{
+                    background: selected ? 'var(--bg-elevated)' : 'var(--accent)',
+                    color: selected ? 'var(--text-secondary)' : 'white',
+                    opacity: pageState.isSaving ? 0.7 : 1,
+                  }}
+                >
+                  {selected ? 'Current layout' : `Use ${option.label}`}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     );
   }
 
   function renderThemePanel() {
     return (
-      <EmptyStateCard
-        title="Theme"
-        body="Site-wide style options will appear here."
-      />
+      <EmptyStateCard body="Shared style options will appear here." />
     );
   }
 
   function renderLeftPanel() {
     switch (activePanel) {
-      case 'pages':
-        return renderPagesPanel();
-      case 'outline':
-        return renderOutlinePanel();
+      case 'navigator':
+        return renderNavigatorPanel();
+      case 'siteWide':
+        return renderSiteWidePanel();
       case 'blocks':
         return renderBlocksPanel();
       case 'theme':
@@ -648,70 +965,50 @@ export function SiteEditorWorkspace() {
   }
 
   function renderInspector() {
-    if (activePanel === 'pages') {
+    if (selectedSharedRegionKey) {
       return (
-        <StorefrontPageInspector
-          page={selectedPage}
-          isLoading={pageState.isLoading}
+        <StorefrontRegionInspector
+          regionKey={selectedSharedRegionKey}
+          regions={regionState.regions}
+          isLoading={regionState.isLoading}
+          isSaving={regionState.isSaving}
+          isPublishing={regionState.isPublishing}
+          isDiscarding={regionState.isDiscarding}
+          error={regionState.error}
+          saveDraft={handleRegionSaveDraft}
+          publish={handleRegionPublish}
+          discard={handleRegionDiscard}
+          onDirtyChange={setHasUnsavedInspectorChanges}
+        />
+      );
+    }
+
+    if (selectedSection) {
+      return (
+        <StorefrontSectionInspector
+          key={selectedOutlineNode?.id ?? 'section'}
+          section={selectedSection}
+          sectionLabel={selectedOutlineNode?.label ?? 'Section'}
           isSaving={pageState.isSaving}
-          isPublishing={pageState.isPublishing}
-          isDiscarding={pageState.isDiscarding}
           error={pageState.error}
-          saveDraft={handlePageSaveDraft}
-          publish={handlePagePublish}
-          discard={handlePageDiscard}
-        />
-      );
-    }
-
-    if (activePanel === 'outline') {
-      if (selectedSharedRegionKey) {
-        return (
-          <StorefrontRegionInspector
-            regionKey={selectedSharedRegionKey}
-            regions={regionState.regions}
-            isLoading={regionState.isLoading}
-            isSaving={regionState.isSaving}
-            isPublishing={regionState.isPublishing}
-            isDiscarding={regionState.isDiscarding}
-            error={regionState.error}
-            saveDraft={handleRegionSaveDraft}
-            publish={handleRegionPublish}
-            discard={handleRegionDiscard}
-          />
-        );
-      }
-
-      if (!selectedOutlineNode) {
-        return (
-          <EmptyStateCard
-            title="Outline"
-            body="Select something from the outline to edit it here."
-          />
-        );
-      }
-
-      return (
-        <EmptyStateCard
-          title={selectedOutlineNode.label}
-          body="Section editing will appear here."
-        />
-      );
-    }
-
-    if (activePanel === 'blocks') {
-      return (
-        <EmptyStateCard
-          title="Blocks"
-          body="Block details will appear here."
+          saveDraft={handleSectionSaveDraft}
+          onDirtyChange={setHasUnsavedInspectorChanges}
         />
       );
     }
 
     return (
-      <EmptyStateCard
-        title="Theme"
-        body="Theme details will appear here."
+      <StorefrontPageInspector
+        page={selectedPage}
+        isLoading={pageState.isLoading}
+        isSaving={pageState.isSaving}
+        isPublishing={pageState.isPublishing}
+        isDiscarding={pageState.isDiscarding}
+        error={pageState.error}
+        saveDraft={handlePageSaveDraft}
+        publish={handlePagePublish}
+        discard={handlePageDiscard}
+        onDirtyChange={setHasUnsavedInspectorChanges}
       />
     );
   }
@@ -726,14 +1023,15 @@ export function SiteEditorWorkspace() {
         }}
       >
         <div className="flex items-center gap-3">
-          <Link
-            href={`/dashboard/${storeId}`}
+          <button
+            type="button"
+            onClick={() => requestNavigation(() => router.push(`/dashboard/${storeId}`))}
             className="inline-flex items-center gap-2 rounded-[var(--radius-md)] px-3 py-2 text-sm font-medium"
             style={{ color: 'var(--text-secondary)' }}
           >
             <ArrowLeft className="h-4 w-4" />
             Dashboard
-          </Link>
+          </button>
           <div>
             <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
               {currentStore?.name ?? 'Site'}
@@ -746,25 +1044,30 @@ export function SiteEditorWorkspace() {
 
         <div className="min-w-0 flex-1 text-center">
           <div className="truncate text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-            {selectedPage?.name?.trim() || selectedPage?.path || 'Select a page'}
+            {selectedOutlineNode?.type === 'shared'
+              ? selectedOutlineNode.label
+              : selectedPage?.name?.trim() || selectedPage?.path || 'Select a page'}
           </div>
           <div className="truncate text-xs" style={{ color: 'var(--text-tertiary)' }}>
-            {activePanel === 'pages'
+            {activePanel === 'navigator'
               ? 'Pages'
-              : activePanel === 'outline'
-                ? 'Outline'
-                : activePanel === 'blocks'
-                  ? 'Blocks'
-                  : 'Theme'}
+              : activePanel === 'siteWide'
+                ? 'Shared'
+              : activePanel === 'blocks'
+                ? 'Blocks'
+                : 'Theme'}
           </div>
         </div>
 
         <div className="flex items-center gap-3">
           {previewUrl.url && (
-            <a
-              href={previewUrl.url}
-              target="_blank"
-              rel="noopener noreferrer"
+            <button
+              type="button"
+              onClick={() =>
+                requestNavigation(() => {
+                  window.open(previewUrl.url!, '_blank', 'noopener,noreferrer');
+                })
+              }
               className="inline-flex items-center gap-2 rounded-[var(--radius-md)] px-3 py-2 text-sm font-medium"
               style={{
                 border: '1px solid var(--bg-border-subtle)',
@@ -773,7 +1076,7 @@ export function SiteEditorWorkspace() {
             >
               <ExternalLink className="h-4 w-4" />
               Open page
-            </a>
+            </button>
           )}
           <UserMenu />
         </div>
@@ -1024,6 +1327,12 @@ export function SiteEditorWorkspace() {
           {renderInspector()}
         </aside>
       </div>
+
+      <UnsavedChangesDialog
+        open={isUnsavedDialogOpen}
+        onStay={handleStayWithUnsavedChanges}
+        onLeave={handleLeaveWithUnsavedChanges}
+      />
     </div>
   );
 }

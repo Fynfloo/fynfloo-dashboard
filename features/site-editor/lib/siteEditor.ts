@@ -7,7 +7,7 @@ import type {
 } from '@/lib/types';
 import { getStorefrontPageLabel } from '@/features/settings/lib/storefrontEditor';
 
-export type SiteEditorPanelKey = 'pages' | 'outline' | 'blocks' | 'theme';
+export type SiteEditorPanelKey = 'navigator' | 'siteWide' | 'blocks' | 'theme';
 
 export type SiteEditorPageNode = {
   id: string;
@@ -44,12 +44,34 @@ export type SiteEditorOutlineNode =
       meta: string | null;
     };
 
+export type SiteEditorSectionSelection = {
+  index: number;
+  section: StorefrontSection;
+};
+
 export type SiteEditorOutlineGroup = {
   id: 'header' | 'template' | 'footer';
   label: string;
   shared: boolean;
   description: string;
   nodes: SiteEditorOutlineNode[];
+};
+
+export type SiteEditorNavigatorPageNode = SiteEditorPageNode & {
+  type: 'page';
+  sections: Extract<SiteEditorOutlineNode, { type: 'section' }>[];
+};
+
+export type SiteEditorNavigatorSharedNode = Extract<
+  SiteEditorOutlineNode,
+  { type: 'shared' }
+>;
+
+export type SiteEditorNavigatorGroup = {
+  id: 'shared' | 'system' | 'content' | 'capability';
+  label: string;
+  description: string;
+  nodes: Array<SiteEditorNavigatorSharedNode | SiteEditorNavigatorPageNode>;
 };
 
 function toPageNode(page: StorefrontPage): SiteEditorPageNode {
@@ -92,62 +114,91 @@ export function buildSiteEditorPageGroups(
   ];
 }
 
-function sharedNodeLabel(block: RegionBlock): string {
-  switch (block.type) {
-    case 'announcement.message':
+function buildPageSectionNodes(
+  page: StorefrontPage,
+): Extract<SiteEditorOutlineNode, { type: 'section' }>[] {
+  return (page.draft.layout ?? []).map((section, index) => ({
+    id: section.id ? `section:${section.id}` : `section:${index}`,
+    label: sectionNodeLabel(section, index),
+    type: 'section',
+    sourceKey: section.id ?? `${index}`,
+    meta: sectionNodeMeta(section),
+  }));
+}
+
+function toNavigatorPageNode(page: StorefrontPage): SiteEditorNavigatorPageNode {
+  return {
+    ...toPageNode(page),
+    type: 'page',
+    sections: buildPageSectionNodes(page),
+  };
+}
+
+export function buildSiteEditorNavigatorPages(
+  pages: StorefrontPage[],
+): SiteEditorNavigatorPageNode[] {
+  return pages.map(toNavigatorPageNode);
+}
+
+function sharedNodeLabel(regionKey: RegionKey): string {
+  switch (regionKey) {
+    case 'announcement':
       return 'Announcement Bar';
-    case 'header.navigation':
+    case 'header':
       return 'Navigation';
-    case 'footer.newsletter':
-      return 'Newsletter';
-    case 'footer.brand':
-      return 'Brand';
-    case 'footer.linkGroup':
-      return block.data.heading?.trim() || 'Link Group';
-    case 'legal.footer':
+    case 'footer':
+      return 'Footer';
+    case 'legalFooter':
       return 'Legal Footer';
-    case 'comingSoon.message':
+    case 'comingSoon':
       return 'Coming Soon';
   }
 }
 
-function toSharedOutlineNode(
-  block: RegionBlock,
-  regionKey: RegionKey,
-): SiteEditorOutlineNode {
-  return {
-    id: `shared:${block.id}`,
-    label: sharedNodeLabel(block),
-    type: 'shared',
-    sourceKey: block.id,
-    regionKey,
-    meta: sharedNodeMeta(block),
-  };
-}
+function sharedNodeMeta(blocks: RegionBlock[]): string | null {
+  if (blocks.length === 0) {
+    return null;
+  }
 
-function sectionNodeLabel(section: StorefrontSection, index: number): string {
-  const rawType = section.type || 'section';
-  const normalized = rawType
-    .split('.')
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-
-  return section.id ? normalized : `${normalized} ${index + 1}`;
-}
-
-function sharedNodeMeta(block: RegionBlock): string | null {
-  if (block.visible === false) {
+  const visibleBlocks = blocks.filter((block) => block.visible !== false);
+  if (visibleBlocks.length === 0) {
     return 'Hidden';
   }
 
-  switch (block.type) {
-    case 'footer.linkGroup':
-      return `${block.data.links.length} links`;
-    case 'header.navigation':
-      return `${block.data.links.length} links`;
-    default:
-      return null;
-  }
+  return null;
+}
+
+function toSharedOutlineNode(
+  regionKey: RegionKey,
+  blocks: RegionBlock[],
+): SiteEditorNavigatorSharedNode {
+  return {
+    id: `shared:${regionKey}`,
+    label: sharedNodeLabel(regionKey),
+    type: 'shared',
+    sourceKey: regionKey,
+    regionKey,
+    meta: sharedNodeMeta(blocks),
+  };
+}
+
+const SECTION_LABELS: Record<string, string> = {
+  'hero.basic': 'Hero',
+  'commerce.categoryGrid': 'Categories',
+  'commerce.featuredCarousel': 'Featured products',
+  'commerce.productGrid': 'Product grid',
+  'commerce.productHero': 'Product details',
+  'commerce.productSpecs': 'Product details',
+  'commerce.relatedProducts': 'Related products',
+  'content.textWithMedia': 'Text with image',
+  'content.testimonials': 'Testimonials',
+  'checkout.cartItems': 'Cart items',
+  'checkout.cartSummary': 'Order summary',
+};
+
+function sectionNodeLabel(section: StorefrontSection, index: number): string {
+  const label = SECTION_LABELS[section.type] ?? 'Section';
+  return section.id ? label : `${label} ${index + 1}`;
 }
 
 function sectionNodeMeta(section: StorefrontSection): string | null {
@@ -155,8 +206,66 @@ function sectionNodeMeta(section: StorefrontSection): string | null {
     return 'Hidden';
   }
 
+  if (section.type === 'hero.basic') {
+    return section.variantKey === 'fullbleed' ? 'Full-bleed' : 'Split';
+  }
+
+  if (section.type === 'content.textWithMedia') {
+    const imagePosition =
+      typeof section.data.imagePosition === 'string' ? section.data.imagePosition : null;
+
+    if (imagePosition === 'left') {
+      return 'Image left';
+    }
+
+    if (imagePosition === 'right') {
+      return 'Image right';
+    }
+  }
+
+  if (section.type === 'commerce.productGrid') {
+    const columns =
+      typeof section.data.columns === 'number' && Number.isFinite(section.data.columns)
+        ? section.data.columns
+        : null;
+
+    if (columns) {
+      return `${columns} columns`;
+    }
+  }
+
   if (section.variantKey) {
     return section.variantKey;
+  }
+
+  return null;
+}
+
+export function getSelectedSiteEditorSection(
+  page: StorefrontPage | null,
+  node: SiteEditorOutlineNode | null,
+): SiteEditorSectionSelection | null {
+  if (!page || !node || node.type !== 'section') {
+    return null;
+  }
+
+  const byIdIndex = page.draft.layout.findIndex(
+    (section) => section.id && section.id === node.sourceKey,
+  );
+
+  if (byIdIndex >= 0) {
+    return {
+      index: byIdIndex,
+      section: page.draft.layout[byIdIndex],
+    };
+  }
+
+  const numericIndex = Number.parseInt(node.sourceKey, 10);
+  if (!Number.isNaN(numericIndex) && page.draft.layout[numericIndex]) {
+    return {
+      index: numericIndex,
+      section: page.draft.layout[numericIndex],
+    };
   }
 
   return null;
@@ -168,32 +277,15 @@ export function buildSiteEditorOutlineGroups(
 ): SiteEditorOutlineGroup[] {
   const draft = regionsDraft ?? {};
   const headerNodes = [
-    ...(draft.announcement?.blocks ?? []).map((block) =>
-      toSharedOutlineNode(block, 'announcement'),
-    ),
-    ...(draft.header?.blocks ?? []).map((block) =>
-      toSharedOutlineNode(block, 'header'),
-    ),
+    ...(draft.announcement ? [toSharedOutlineNode('announcement', draft.announcement.blocks)] : []),
+    ...(draft.header ? [toSharedOutlineNode('header', draft.header.blocks)] : []),
   ];
 
   const footerNodes = [
-    ...(draft.footer?.blocks ?? []).map((block) =>
-      toSharedOutlineNode(block, 'footer'),
-    ),
-    ...(draft.legalFooter?.blocks ?? []).map((block) =>
-      toSharedOutlineNode(block, 'legalFooter'),
-    ),
+    ...(draft.footer ? [toSharedOutlineNode('footer', draft.footer.blocks)] : []),
   ];
 
-  const templateNodes = (page?.draft.layout ?? []).map<SiteEditorOutlineNode>(
-    (section, index) => ({
-      id: section.id ? `section:${section.id}` : `section:${index}`,
-      label: sectionNodeLabel(section, index),
-      type: 'section',
-      sourceKey: section.id ?? `${index}`,
-      meta: sectionNodeMeta(section),
-    }),
-  );
+  const templateNodes = page ? buildPageSectionNodes(page) : [];
 
   return [
     {
@@ -219,5 +311,60 @@ export function buildSiteEditorOutlineGroups(
       description: 'Shared footer content shown anywhere your footer appears.',
       nodes: footerNodes,
     },
+  ];
+}
+
+export function buildSiteEditorNavigatorGroups(
+  pages: StorefrontPage[],
+  regionsDraft: RegionMap | null,
+): SiteEditorNavigatorGroup[] {
+  const draft = regionsDraft ?? {};
+  const sharedNodes: SiteEditorNavigatorSharedNode[] = [
+    ...(draft.announcement ? [toSharedOutlineNode('announcement', draft.announcement.blocks)] : []),
+    ...(draft.header ? [toSharedOutlineNode('header', draft.header.blocks)] : []),
+    ...(draft.footer ? [toSharedOutlineNode('footer', draft.footer.blocks)] : []),
+    ...(draft.comingSoon ? [toSharedOutlineNode('comingSoon', draft.comingSoon.blocks)] : []),
+  ];
+
+  const pageNodes = pages.map(toNavigatorPageNode);
+
+  return [
+    {
+      id: 'system',
+      label: 'Core Pages',
+      description: 'Key pages that come with your current site setup.',
+      nodes: pageNodes.filter((page) => page.pageClass === 'system'),
+    },
+    {
+      id: 'content',
+      label: 'Custom Pages',
+      description: 'Pages like About, Contact, and FAQ.',
+      nodes: pageNodes.filter((page) => page.pageClass === 'content'),
+    },
+    {
+      id: 'capability',
+      label: 'Feature Pages',
+      description: 'Pages unlocked by extra features such as bookings or tickets.',
+      nodes: pageNodes.filter((page) => page.pageClass === 'capability'),
+    },
+    {
+      id: 'shared',
+      label: 'Shared',
+      description: 'Areas that can appear across multiple pages.',
+      nodes: sharedNodes,
+    },
+  ];
+}
+
+export function buildSiteEditorSiteWideNodes(
+  regionsDraft: RegionMap | null,
+): SiteEditorNavigatorSharedNode[] {
+  const draft = regionsDraft ?? {};
+
+  return [
+    ...(draft.announcement ? [toSharedOutlineNode('announcement', draft.announcement.blocks)] : []),
+    ...(draft.header ? [toSharedOutlineNode('header', draft.header.blocks)] : []),
+    ...(draft.footer ? [toSharedOutlineNode('footer', draft.footer.blocks)] : []),
+    ...(draft.comingSoon ? [toSharedOutlineNode('comingSoon', draft.comingSoon.blocks)] : []),
   ];
 }

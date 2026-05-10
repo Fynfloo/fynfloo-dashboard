@@ -66,12 +66,12 @@ const REGION_COPY: Record<RegionKey, { title: string; description: string }> = {
     description: 'Short promo text shown at the very top of your site.',
   },
   header: {
-    title: 'Header',
+    title: 'Navigation',
     description: 'Primary site navigation that appears across the experience.',
   },
   footer: {
     title: 'Footer',
-    description: 'Newsletter, brand story, and footer link groups.',
+    description: 'Footer content, link groups, and lower-page details shown across the site.',
   },
   legalFooter: {
     title: 'Legal Footer',
@@ -502,6 +502,27 @@ function renderRegionFields(
               onChange={(e) => update({ footerHelpLinks: e.target.value })}
             />
           </Field>
+          <Field
+            label="Copyright text"
+            helper="Leave blank to let the site fall back to the store name and current year."
+          >
+            <TextInput
+              value={values.legalCopyrightText}
+              onChange={(e) => update({ legalCopyrightText: e.target.value })}
+            />
+          </Field>
+          <div className="space-y-3">
+            <Toggle
+              checked={values.legalShowPaymentProvider}
+              onChange={(checked) => update({ legalShowPaymentProvider: checked })}
+              label="Show payment provider label"
+            />
+            <Toggle
+              checked={values.legalShowPoweredBy}
+              onChange={(checked) => update({ legalShowPoweredBy: checked })}
+              label="Show Powered by Fynfloo label"
+            />
+          </div>
         </div>
       );
     case 'legalFooter':
@@ -583,6 +604,7 @@ type StorefrontRegionInspectorProps = {
   saveDraft: (draft: RegionMap) => Promise<boolean>;
   publish: () => Promise<boolean>;
   discard: () => Promise<boolean>;
+  onDirtyChange?: (hasUnsavedChanges: boolean) => void;
 };
 
 export function StorefrontRegionInspector({
@@ -596,6 +618,7 @@ export function StorefrontRegionInspector({
   saveDraft,
   publish,
   discard,
+  onDirtyChange,
 }: StorefrontRegionInspectorProps) {
   const [values, setValues] = useState<Fields>(DEFAULT_FIELDS);
   const [saved, setSaved] = useState(false);
@@ -612,6 +635,11 @@ export function StorefrontRegionInspector({
 
   const hasServerDraftChanges = regions?.hasUnpublishedChanges ?? false;
   const hasUnsavedLocalChanges = serializeFields(values) !== serializeFields(baseValues);
+
+  useEffect(() => {
+    onDirtyChange?.(hasUnsavedLocalChanges);
+    return () => onDirtyChange?.(false);
+  }, [hasUnsavedLocalChanges, onDirtyChange]);
 
   async function handleSave() {
     const ok = await saveDraft(buildDraft(values, currentDraft));

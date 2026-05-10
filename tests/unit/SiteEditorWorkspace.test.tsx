@@ -20,12 +20,82 @@ const mockPage: StorefrontPage = {
   isPublished: true,
   hasUnpublishedChanges: false,
   draft: {
-    layout: [{ id: 'hero', type: 'hero.basic', visible: true, data: {} }],
+    layout: [
+      {
+        id: 'hero',
+        type: 'hero.basic',
+        visible: true,
+        variantKey: 'split',
+        data: {
+          variant: 'split',
+          title: 'Summer essentials',
+          subtitle: 'Everything you need for the new season.',
+        },
+      },
+    ],
     seoTitle: null,
     seoDescription: null,
   },
   published: {
-    layout: [{ id: 'hero', type: 'hero.basic', visible: true, data: {} }],
+    layout: [
+      {
+        id: 'hero',
+        type: 'hero.basic',
+        visible: true,
+        variantKey: 'split',
+        data: {
+          variant: 'split',
+          title: 'Summer essentials',
+          subtitle: 'Everything you need for the new season.',
+        },
+      },
+    ],
+    seoTitle: null,
+    seoDescription: null,
+  },
+};
+
+const mockAboutPage: StorefrontPage = {
+  id: 'page-about',
+  path: '/about',
+  name: 'About',
+  kind: 'content',
+  pageClass: 'content',
+  isPublished: true,
+  hasUnpublishedChanges: false,
+  draft: {
+    layout: [
+      {
+        id: 'about-story',
+        type: 'content.textWithMedia',
+        visible: true,
+        data: {
+          title: 'Our story',
+          body: 'Built for thoughtful brands.',
+          imageUrl: null,
+          imageAlt: null,
+          imagePosition: 'right',
+        },
+      },
+    ],
+    seoTitle: null,
+    seoDescription: null,
+  },
+  published: {
+    layout: [
+      {
+        id: 'about-story',
+        type: 'content.textWithMedia',
+        visible: true,
+        data: {
+          title: 'Our story',
+          body: 'Built for thoughtful brands.',
+          imageUrl: null,
+          imageAlt: null,
+          imagePosition: 'right',
+        },
+      },
+    ],
     seoTitle: null,
     seoDescription: null,
   },
@@ -82,8 +152,9 @@ vi.mock('@/components/layout/UserMenu', () => ({
   UserMenu: () => <div>User menu</div>,
 }));
 
-const { apiRequestMock } = vi.hoisted(() => ({
+const { apiRequestMock, saveDraftMock } = vi.hoisted(() => ({
   apiRequestMock: vi.fn(),
+  saveDraftMock: vi.fn(),
 }));
 
 vi.mock('@/lib/api', () => ({
@@ -92,7 +163,7 @@ vi.mock('@/lib/api', () => ({
 
 vi.mock('@/features/settings/hooks/useStorefrontPages', () => ({
   useStorefrontPages: () => ({
-    pages: [mockPage],
+    pages: [mockPage, mockAboutPage],
     isLoading: false,
     isCreating: false,
     isSaving: false,
@@ -100,7 +171,7 @@ vi.mock('@/features/settings/hooks/useStorefrontPages', () => ({
     isDiscarding: false,
     error: null,
     createPage: vi.fn(),
-    saveDraft: vi.fn(),
+    saveDraft: saveDraftMock,
     publish: vi.fn(),
     discard: vi.fn(),
   }),
@@ -138,6 +209,7 @@ describe('SiteEditorWorkspace', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     apiRequestMock.mockResolvedValue(buildPreviewSession());
+    saveDraftMock.mockResolvedValue(mockPage);
   });
 
   it('opens the secondary panel as an overlay and allows pinning and closing it', async () => {
@@ -148,6 +220,11 @@ describe('SiteEditorWorkspace', () => {
     expect(screen.getByLabelText('Pages panel')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Pin panel' })).toBeInTheDocument();
     expect(screen.getByText('Site view')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Collapse Home' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Collapse Home' }));
+
+    expect(screen.queryByRole('treeitem', { name: 'Hero Split' })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Pin panel' }));
 
@@ -157,23 +234,23 @@ describe('SiteEditorWorkspace', () => {
 
     expect(screen.queryByLabelText('Pages panel')).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Outline' }));
+    await user.click(screen.getByRole('button', { name: 'Pages' }));
 
-    expect(screen.getByLabelText('Outline panel')).toBeInTheDocument();
+    expect(screen.getByLabelText('Pages panel')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Select a section or site-wide area to edit it.',
+        'Choose a page and open the parts you want to edit.',
       ),
     ).toBeInTheDocument();
   });
 
-  it('opens the real region inspector when a shared outline node is selected', async () => {
+  it('opens the real region inspector when a shared item is selected', async () => {
     const user = userEvent.setup();
 
     render(<SiteEditorWorkspace />);
 
-    await user.click(screen.getByRole('button', { name: 'Outline' }));
-    await user.click(screen.getByRole('button', { name: /Announcement Bar/ }));
+    await user.click(screen.getByRole('button', { name: 'Shared' }));
+    await user.click(screen.getByRole('button', { name: 'Announcement Bar' }));
 
     expect(screen.getByRole('heading', { name: 'Announcement Bar' })).toBeInTheDocument();
     expect(
@@ -182,6 +259,73 @@ describe('SiteEditorWorkspace', () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save draft' })).toBeInTheDocument();
+  });
+
+  it('opens a real section inspector when a page section is selected', async () => {
+    const user = userEvent.setup();
+
+    render(<SiteEditorWorkspace />);
+
+    await user.click(screen.getByRole('treeitem', { name: 'Hero Split' }));
+
+    expect(screen.getByRole('heading', { name: 'Hero' })).toBeInTheDocument();
+    expect(
+      screen.getByText('Update the content and settings for this part of the page.'),
+    ).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Summer essentials')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+  });
+
+  it('saves a new hero layout from the blocks view', async () => {
+    const user = userEvent.setup();
+
+    render(<SiteEditorWorkspace />);
+
+    await user.click(screen.getByRole('treeitem', { name: 'Hero Split' }));
+    await user.click(screen.getByRole('button', { name: 'Blocks' }));
+    await user.click(screen.getByRole('button', { name: 'Use Full-bleed hero' }));
+
+    await waitFor(() => {
+      expect(saveDraftMock).toHaveBeenCalledWith('page-home', {
+        layout: [
+          {
+            id: 'hero',
+            type: 'hero.basic',
+            visible: true,
+            variantKey: 'fullbleed',
+            data: {
+              variant: 'fullbleed',
+              title: 'Summer essentials',
+              subtitle: 'Everything you need for the new season.',
+              eyebrow: undefined,
+              imageUrl: undefined,
+              primaryCtaLabel: undefined,
+              secondaryCtaLabel: undefined,
+            },
+          },
+        ],
+      });
+    });
+  });
+
+  it('warns before switching pages when there are unsaved edits', async () => {
+    const user = userEvent.setup();
+
+    render(<SiteEditorWorkspace />);
+
+    await user.click(screen.getByRole('treeitem', { name: 'Hero Split' }));
+    const titleInput = screen.getByDisplayValue('Summer essentials');
+    await user.clear(titleInput);
+    await user.type(titleInput, 'Fresh arrivals');
+    await user.click(screen.getByRole('button', { name: 'About /about' }));
+
+    expect(screen.getByRole('heading', { name: 'Unsaved changes' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Leave without saving' }));
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('/about')).toBeInTheDocument();
+    });
   });
 
   it('boots the iframe through the storefront preview route once the preview session loads', async () => {

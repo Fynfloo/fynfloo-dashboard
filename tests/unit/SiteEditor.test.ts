@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { RegionMap, StorefrontPage } from '@/lib/types';
 import {
+  buildSiteEditorNavigatorPages,
   buildSiteEditorOutlineGroups,
   buildSiteEditorPageGroups,
+  buildSiteEditorSiteWideNodes,
+  getSelectedSiteEditorSection,
 } from '@/features/site-editor/lib/siteEditor';
 
 const basePage: StorefrontPage = {
@@ -51,6 +54,40 @@ describe('site editor helpers', () => {
     expect(groups[0].nodes).toHaveLength(1);
     expect(groups[1].nodes).toHaveLength(1);
     expect(groups[2].nodes).toHaveLength(1);
+  });
+
+  it('builds a plain navigator page list in page order', () => {
+    const pages = buildSiteEditorNavigatorPages([
+      buildPage({ id: 'page-home', path: '/', name: 'Home' }),
+      buildPage({ id: 'page-about', path: '/about', name: 'About', pageClass: 'content' }),
+    ]);
+
+    expect(pages.map((page) => page.label)).toEqual(['Home', 'About']);
+    expect(pages[0]?.sections).toEqual([]);
+    expect(pages[1]?.path).toBe('/about');
+  });
+
+  it('builds compact shared entries for shared editing areas', () => {
+    const nodes = buildSiteEditorSiteWideNodes({
+      announcement: {
+        key: 'announcement',
+        blocks: [{ id: 'announcement-message', type: 'announcement.message', data: { text: 'Hi' } }],
+      },
+      header: {
+        key: 'header',
+        blocks: [{ id: 'header-navigation', type: 'header.navigation', data: { links: [] } }],
+      },
+      footer: {
+        key: 'footer',
+        blocks: [{ id: 'footer-newsletter', type: 'footer.newsletter', data: { heading: 'Stay', body: 'Latest' } }],
+      },
+    });
+
+    expect(nodes.map((node) => node.label)).toEqual([
+      'Announcement Bar',
+      'Navigation',
+      'Footer',
+    ]);
   });
 
   it('builds header/template/footer outline groups from shared regions and page sections', () => {
@@ -121,17 +158,35 @@ describe('site editor helpers', () => {
       regionKey: 'header',
     });
     expect(groups[1].id).toBe('template');
-    expect(groups[1].nodes.map((node) => node.label)).toEqual(['Hero Basic', 'Cta Banner']);
+    expect(groups[1].nodes.map((node) => node.label)).toEqual(['Hero', 'Section']);
     expect(groups[1].nodes[1]?.meta).toBe('Hidden');
     expect(groups[2].id).toBe('footer');
-    expect(groups[2].nodes.map((node) => node.label)).toEqual(['Newsletter', 'Legal Footer']);
+    expect(groups[2].nodes.map((node) => node.label)).toEqual(['Footer']);
     expect(groups[2].nodes[0]).toMatchObject({
       type: 'shared',
       regionKey: 'footer',
     });
-    expect(groups[2].nodes[1]).toMatchObject({
-      type: 'shared',
-      regionKey: 'legalFooter',
+  });
+
+  it('resolves a selected section back to its page layout entry', () => {
+    const page = buildPage({
+      draft: {
+        layout: [
+          { id: 'hero', type: 'hero.basic', visible: true, variantKey: 'split', data: {} },
+          { id: 'categories', type: 'commerce.categoryGrid', visible: true, data: {} },
+        ],
+        seoTitle: null,
+        seoDescription: null,
+      },
+    });
+
+    const groups = buildSiteEditorOutlineGroups(page, {});
+    const heroNode = groups[1].nodes[0] ?? null;
+
+    expect(heroNode?.label).toBe('Hero');
+    expect(getSelectedSiteEditorSection(page, heroNode)).toMatchObject({
+      index: 0,
+      section: page.draft.layout[0],
     });
   });
 });
