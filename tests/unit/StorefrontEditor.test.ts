@@ -90,7 +90,7 @@ describe('storefront editor helpers', () => {
     );
 
     expect(preview.path).toBe('/about');
-    expect(preview.reason).toMatch(/protected preview session/i);
+    expect(preview.reason).toMatch(/still private until you publish/i);
     expect(preview.requiresPreviewToken).toBe(true);
   });
 
@@ -118,7 +118,7 @@ describe('storefront editor helpers', () => {
     });
 
     expect(result.url).toBeNull();
-    expect(result.note).toMatch(/preparing draft preview/i);
+    expect(result.note).toMatch(/opening this page/i);
   });
 
   it('falls back to localhost preview hosts when no explicit origin is configured', () => {
@@ -129,6 +129,6 @@ describe('storefront editor helpers', () => {
     });
 
     expect(result.url).toBe('http://minimal-demo.localhost:3000/products');
-    expect(result.note).toMatch(/NEXT_PUBLIC_STOREFRONT_EDITOR_ORIGIN/i);
+    expect(result.note).toBeNull();
   });
 });

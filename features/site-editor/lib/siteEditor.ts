@@ -73,20 +73,20 @@ export function buildSiteEditorPageGroups(
   return [
     {
       id: 'system',
-      label: 'System Pages',
-      description: 'Core editable templates powered by the active capability set.',
+      label: 'Core Pages',
+      description: 'Key pages that come with your current site setup.',
       nodes: pageNodes.filter((page) => page.pageClass === 'system'),
     },
     {
       id: 'content',
-      label: 'Content Pages',
-      description: 'Merchant-created pages like About, Contact, and FAQ.',
+      label: 'Custom Pages',
+      description: 'Pages like About, Contact, and FAQ.',
       nodes: pageNodes.filter((page) => page.pageClass === 'content'),
     },
     {
       id: 'capability',
-      label: 'Capability Pages',
-      description: 'Pages unlocked by future capabilities such as bookings or tickets.',
+      label: 'Feature Pages',
+      description: 'Pages unlocked by extra features such as bookings or tickets.',
       nodes: pageNodes.filter((page) => page.pageClass === 'capability'),
     },
   ];
@@ -200,12 +200,12 @@ export function buildSiteEditorOutlineGroups(
       id: 'header',
       label: 'Header',
       shared: true,
-      description: 'Shared shell content that appears across the storefront.',
+      description: 'Shared site content that appears across your pages.',
       nodes: headerNodes,
     },
     {
       id: 'template',
-      label: 'Template',
+      label: 'Page',
       shared: false,
       description: page
         ? `${getStorefrontPageLabel(page)} page structure`
@@ -216,7 +216,7 @@ export function buildSiteEditorOutlineGroups(
       id: 'footer',
       label: 'Footer',
       shared: true,
-      description: 'Shared footer content projected into the current page outline.',
+      description: 'Shared footer content shown anywhere your footer appears.',
       nodes: footerNodes,
     },
   ];

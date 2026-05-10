@@ -159,7 +159,7 @@ export function resolveStorefrontPreviewState(
         title: getStorefrontPageLabel(page),
         reason: page.isPublished
           ? null
-          : 'Draft-only pages stay hidden from public visitors. The editor uses a protected preview session to render this page safely before it is published.',
+          : 'This page is still private until you publish it. You can keep editing it here safely before it goes live.',
         requiresPreviewToken: !page.isPublished,
       };
     }
@@ -167,7 +167,7 @@ export function resolveStorefrontPreviewState(
 
   return {
     path: getPreferredPublishedPreviewPath(pages),
-    title: 'Storefront shell',
+    title: 'Site',
     reason: null,
     requiresPreviewToken: false,
   };
@@ -210,7 +210,7 @@ function resolveStorefrontPreviewOrigin({
   if (!subdomain) {
     return {
       origin: null,
-      note: 'Storefront preview becomes available after the store context loads.',
+      note: 'Your site view will appear once the store finishes loading.',
     };
   }
 
@@ -228,7 +228,7 @@ function resolveStorefrontPreviewOrigin({
   if (!currentOrigin) {
     return {
       origin: null,
-      note: 'Preparing storefront preview…',
+      note: 'Opening your site view…',
     };
   }
 
@@ -245,20 +245,20 @@ function resolveStorefrontPreviewOrigin({
   if (origin.hostname === 'lvh.me' || origin.hostname.endsWith('.lvh.me')) {
     return {
       origin: `${origin.protocol}//${subdomain}.lvh.me${port}`,
-      note: 'Using the local lvh.me preview host. Set NEXT_PUBLIC_STOREFRONT_EDITOR_ORIGIN if your storefront dev server uses a different port.',
+      note: null,
     };
   }
 
   if (origin.hostname === 'localhost' || origin.hostname.endsWith('.localhost')) {
     return {
       origin: `${origin.protocol}//${subdomain}.localhost${port}`,
-      note: 'Using the local *.localhost preview host. Set NEXT_PUBLIC_STOREFRONT_EDITOR_ORIGIN if your storefront dev server uses a different host or port.',
+      note: null,
     };
   }
 
   return {
     origin: null,
-    note: 'Set NEXT_PUBLIC_STOREFRONT_EDITOR_ORIGIN to enable iframe preview in this environment.',
+    note: 'The site view is not ready in this environment yet.',
   };
 }
 
@@ -302,7 +302,7 @@ export function buildStorefrontPreviewUrl({
   if (requiresPreviewToken) {
     return {
       url: null,
-      note: 'Preparing draft preview…',
+      note: 'Opening this page…',
     };
   }
 

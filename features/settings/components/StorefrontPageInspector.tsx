@@ -303,7 +303,7 @@ export function StorefrontPageInspector({
           color: 'var(--text-secondary)',
         }}
       >
-        Visual section drag-and-drop lands on top of this same page record, so page selection and editing now live beside the preview instead of in a separate manager.
+        Update page details here.
       </div>
 
       <div className="flex flex-wrap gap-3">

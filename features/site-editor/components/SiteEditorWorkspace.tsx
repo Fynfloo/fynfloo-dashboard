@@ -179,7 +179,7 @@ export function SiteEditorWorkspace() {
     } catch (err) {
       const apiError = err as { message?: string };
       setPreviewSession(null);
-      setPreviewSessionError(apiError.message ?? 'Failed to prepare draft preview');
+      setPreviewSessionError(apiError.message ?? 'Could not open the current page view');
     } finally {
       setIsPreviewSessionLoading(false);
     }
@@ -261,9 +261,9 @@ export function SiteEditorWorkspace() {
   );
 
   const previewSessionNote = previewSessionError
-    ? `Draft preview unavailable: ${previewSessionError}`
+    ? `Current page unavailable: ${previewSessionError}`
     : isPreviewSessionLoading
-      ? 'Preparing draft preview session…'
+      ? 'Opening your site view…'
       : null;
 
   useEffect(() => {
@@ -392,14 +392,9 @@ export function SiteEditorWorkspace() {
   function renderPagesPanel() {
     return (
       <div className="space-y-5">
-        <div className="space-y-1">
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-            Pages
-          </h2>
-          <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-            Switch between editable pages and templates. Shared shell items will live in the outline, not here.
-          </p>
-        </div>
+        <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+          Choose a page to edit or add a new one.
+        </p>
 
         <div className="rounded-[var(--radius-md)]" style={{ border: '1px solid var(--bg-border-subtle)', background: 'var(--bg-surface)' }}>
           <button
@@ -543,14 +538,9 @@ export function SiteEditorWorkspace() {
   function renderOutlinePanel() {
     return (
       <div className="space-y-5">
-        <div className="space-y-1">
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-            Outline
-          </h2>
-          <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-            Shared shell groups now sit around the current page structure instead of appearing as fake top-level pages.
-          </p>
-        </div>
+        <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+          Select a section or site-wide area to edit it.
+        </p>
 
         <div className="space-y-4">
           {outlineGroups.map((group) => (
@@ -564,7 +554,7 @@ export function SiteEditorWorkspace() {
                       className="rounded-full px-2 py-0.5 text-[11px] font-medium"
                       style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}
                     >
-                      shared
+                      site-wide
                     </span>
                   )}
                 </div>
@@ -578,7 +568,7 @@ export function SiteEditorWorkspace() {
                   <div className="px-4 py-4 text-sm" style={{ color: 'var(--text-secondary)' }}>
                     {group.id === 'template'
                       ? 'No sections on this page yet.'
-                      : 'No shared nodes in this group yet.'}
+                      : 'Nothing here yet.'}
                   </div>
                 ) : (
                   <div className="divide-y" style={{ borderColor: 'var(--bg-border-subtle)' }}>
@@ -601,7 +591,7 @@ export function SiteEditorWorkspace() {
                                 {node.label}
                               </div>
                               <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                                {node.type === 'shared' ? 'Shared shell item' : 'Template section'}
+                                {node.type === 'shared' ? 'Site-wide item' : 'Section'}
                               </div>
                             </div>
                             {node.meta && (
@@ -630,7 +620,7 @@ export function SiteEditorWorkspace() {
     return (
       <EmptyStateCard
         title="Blocks"
-        body="This panel will become the searchable insert library. It will be filtered by template, capability set, and the selected outline drop zone before sections and blocks can be added."
+        body="New blocks for this page will appear here."
       />
     );
   }
@@ -639,7 +629,7 @@ export function SiteEditorWorkspace() {
     return (
       <EmptyStateCard
         title="Theme"
-        body="Theme controls move here next. The goal is to edit global visual tokens and template options in the editor instead of bouncing back to standard settings screens."
+        body="Site-wide style options will appear here."
       />
     );
   }
@@ -695,8 +685,8 @@ export function SiteEditorWorkspace() {
       if (!selectedOutlineNode) {
         return (
           <EmptyStateCard
-            title="Outline Inspector"
-            body="Select a node from the outline to inspect it. Shared shell nodes now open their real controls here, and template sections will expose section fields and actions next."
+            title="Outline"
+            body="Select something from the outline to edit it here."
           />
         );
       }
@@ -704,7 +694,7 @@ export function SiteEditorWorkspace() {
       return (
         <EmptyStateCard
           title={selectedOutlineNode.label}
-          body="This is a page section. In the next step, section fields, visibility, variant controls, and drag-and-drop actions will be edited here."
+          body="Section editing will appear here."
         />
       );
     }
@@ -712,16 +702,16 @@ export function SiteEditorWorkspace() {
     if (activePanel === 'blocks') {
       return (
         <EmptyStateCard
-          title="Blocks Inspector"
-          body="The insert library lands here next with searchable, template-aware block entries and capability-aware filtering."
+          title="Blocks"
+          body="Block details will appear here."
         />
       );
     }
 
     return (
       <EmptyStateCard
-        title="Theme Inspector"
-        body="Theme tokens and template-level controls will move into this panel once the dedicated Site editor owns theme editing."
+        title="Theme"
+        body="Theme details will appear here."
       />
     );
   }
@@ -749,7 +739,7 @@ export function SiteEditorWorkspace() {
               {currentStore?.name ?? 'Site'}
             </div>
             <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-              Site editor workspace
+              Site editor
             </div>
           </div>
         </div>
@@ -829,13 +819,8 @@ export function SiteEditorWorkspace() {
                     borderBottom: '1px solid var(--bg-border-subtle)',
                   }}
                 >
-                  <div className="space-y-1">
-                    <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-                      {activePanelMeta.label}
-                    </div>
-                    <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                      Pinned panel
-                    </div>
+                  <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                    {activePanelMeta.label}
                   </div>
                   <div className="flex items-center gap-2">
                     <button
@@ -895,16 +880,8 @@ export function SiteEditorWorkspace() {
                       className="flex items-center justify-between gap-3 px-5 py-4"
                       style={{ borderBottom: '1px solid var(--bg-border-subtle)' }}
                     >
-                      <div className="space-y-1">
-                        <div
-                          className="text-sm font-semibold"
-                          style={{ color: 'var(--text-primary)' }}
-                        >
-                          {activePanelMeta.label}
-                        </div>
-                        <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                          Overlay panel
-                        </div>
+                      <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                        {activePanelMeta.label}
                       </div>
                       <div className="flex items-center gap-2">
                         <button
@@ -949,10 +926,10 @@ export function SiteEditorWorkspace() {
               >
                 <div>
                   <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-                    Preview
+                    Site view
                   </div>
                   <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                    Real storefront iframe inside the new Site editor layout
+                    Changes appear here as you move through the site.
                   </div>
                 </div>
                 <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
@@ -1023,10 +1000,10 @@ export function SiteEditorWorkspace() {
                     <div className="flex h-full items-center justify-center px-8 text-center">
                       <div className="max-w-md space-y-3">
                         <div className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
-                          Preview not configured yet
+                          Site view unavailable
                         </div>
                         <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                          Set <code>NEXT_PUBLIC_STOREFRONT_EDITOR_ORIGIN</code> to your running storefront origin, for example <code>http://{'{subdomain}'}.localhost:3001</code>, and this workspace will use the real storefront renderer here.
+                          Finish the site setup for this environment and reload the editor.
                         </p>
                       </div>
                     </div>

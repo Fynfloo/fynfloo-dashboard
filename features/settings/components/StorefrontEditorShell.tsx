@@ -166,11 +166,11 @@ export function StorefrontEditorShell() {
             <div className="flex items-center gap-2">
               <Layers3 className="h-4 w-4" style={{ color: 'var(--accent)' }} />
               <h2 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
-                Storefront Editor
+                Site Editor
               </h2>
             </div>
             <p className="max-w-3xl text-sm" style={{ color: 'var(--text-secondary)' }}>
-              The storefront shell, site tree, and page drafts now live around the iframe preview so merchants can move through their store the same way they think about it. Full section drag-and-drop plugs into this shell next.
+              Site structure and page changes now live in one workspace so merchants can move through their store naturally. Deeper section controls build on top of this next.
             </p>
           </div>
           <div
@@ -178,7 +178,7 @@ export function StorefrontEditorShell() {
             style={{ color: 'var(--text-tertiary)' }}
           >
             <FolderTree className="h-4 w-4" />
-            Global regions, pages, and preview stay in one surface now.
+            Global regions and pages stay in one workspace now.
           </div>
         </div>
       </div>
@@ -389,13 +389,13 @@ export function StorefrontEditorShell() {
               <div className="flex items-center gap-2">
                 <Globe className="h-4 w-4" style={{ color: 'var(--accent)' }} />
                 <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-                  Live Preview Frame
+                  Site view
                 </h3>
               </div>
               <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
                 {effectiveSelection.type === 'page'
                   ? `Focused on ${previewState.title}.`
-                  : 'Focused on the storefront shell.'}
+                  : 'Focused on shared site areas.'}
               </p>
             </div>
             {previewUrl.url && (
@@ -407,7 +407,7 @@ export function StorefrontEditorShell() {
                 style={{ color: 'var(--accent)' }}
               >
                 <ExternalLink className="h-4 w-4" />
-                Open preview
+                Open page
               </a>
             )}
           </div>
@@ -460,13 +460,10 @@ export function StorefrontEditorShell() {
                     className="text-base font-semibold"
                     style={{ color: 'var(--text-primary)' }}
                   >
-                    Preview not configured yet
+                    Site view unavailable
                   </div>
                   <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                    Set <code>NEXT_PUBLIC_STOREFRONT_EDITOR_ORIGIN</code> to your running
-                    storefront origin, for example{' '}
-                    <code>http://{'{subdomain}'}.localhost:3001</code>, and this iframe will use
-                    the real storefront renderer.
+                    Finish the storefront setup for this environment and reload the editor.
                   </p>
                 </div>
               </div>

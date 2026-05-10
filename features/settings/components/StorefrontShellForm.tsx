@@ -543,8 +543,7 @@ export function StorefrontShellForm() {
           </div>
           <p className="text-sm max-w-2xl" style={{ color: 'var(--text-secondary)' }}>
             Edit the announcement bar, navigation, footer, legal strip, and coming-soon shell.
-            This is the first structured shell editor while the full iframe editor is still being
-            built.
+            This workspace gives those shared areas a dedicated editing surface.
           </p>
         </div>
 

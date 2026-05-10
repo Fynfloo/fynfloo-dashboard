@@ -63,11 +63,11 @@ const DEFAULT_FIELDS: Fields = {
 const REGION_COPY: Record<RegionKey, { title: string; description: string }> = {
   announcement: {
     title: 'Announcement Bar',
-    description: 'Short promo text shown at the very top of the storefront shell.',
+    description: 'Short promo text shown at the very top of your site.',
   },
   header: {
     title: 'Header',
-    description: 'Primary storefront navigation that appears across the experience.',
+    description: 'Primary site navigation that appears across the experience.',
   },
   footer: {
     title: 'Footer',
@@ -79,7 +79,7 @@ const REGION_COPY: Record<RegionKey, { title: string; description: string }> = {
   },
   comingSoon: {
     title: 'Coming Soon',
-    description: 'Temporary launch page content for stores that are not ready to go live.',
+    description: 'Temporary launch page content for sites that are not ready to go live.',
   },
 };
 
@@ -678,7 +678,7 @@ export function StorefrontRegionInspector({
           )}
         </div>
         <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-          {copy.description} Shell changes apply across the storefront, so they stay beside the preview instead of living in a separate settings form.
+          {copy.description} Changes made here carry through your site anywhere this area appears.
         </p>
       </div>
 

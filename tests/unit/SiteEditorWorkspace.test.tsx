@@ -147,6 +147,7 @@ describe('SiteEditorWorkspace', () => {
 
     expect(screen.getByLabelText('Pages panel')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Pin panel' })).toBeInTheDocument();
+    expect(screen.getByText('Site view')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Pin panel' }));
 
@@ -161,7 +162,7 @@ describe('SiteEditorWorkspace', () => {
     expect(screen.getByLabelText('Outline panel')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Shared shell groups now sit around the current page structure instead of appearing as fake top-level pages.',
+        'Select a section or site-wide area to edit it.',
       ),
     ).toBeInTheDocument();
   });
@@ -177,7 +178,7 @@ describe('SiteEditorWorkspace', () => {
     expect(screen.getByRole('heading', { name: 'Announcement Bar' })).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Short promo text shown at the very top of the storefront shell. Shell changes apply across the storefront, so they stay beside the preview instead of living in a separate settings form.',
+        'Short promo text shown at the very top of your site. Changes made here carry through your site anywhere this area appears.',
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save draft' })).toBeInTheDocument();
