@@ -603,6 +603,12 @@ export type StorefrontPagesResponse = {
   pages: StorefrontPage[];
 };
 
+export type StorefrontPreviewSession = {
+  token: string;
+  slug: string;
+  expiresAt: string;
+};
+
 export type CreateStorefrontPageInput = {
   name: string;
   path: string;

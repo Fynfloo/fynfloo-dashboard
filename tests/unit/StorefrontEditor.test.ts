@@ -72,7 +72,7 @@ describe('storefront editor helpers', () => {
     expect(selection).toEqual({ type: 'page', pageId: 'page-home' });
   });
 
-  it('falls back preview to a live page when the selected page is draft only', () => {
+  it('keeps the selected draft-only page path and requires a preview session', () => {
     const pages = [
       buildPage({ id: 'page-home', path: '/', name: 'Home', pageClass: 'system' }),
       buildPage({
@@ -89,20 +89,36 @@ describe('storefront editor helpers', () => {
       pages,
     );
 
-    expect(preview.path).toBe('/');
-    expect(preview.reason).toMatch(/draft-only pages stay hidden/i);
+    expect(preview.path).toBe('/about');
+    expect(preview.reason).toMatch(/protected preview session/i);
+    expect(preview.requiresPreviewToken).toBe(true);
   });
 
-  it('builds preview urls from a configured storefront origin', () => {
+  it('builds preview bootstrap urls from a configured storefront origin when a preview token exists', () => {
     const result = buildStorefrontPreviewUrl({
       subdomain: 'minimal-demo',
       path: '/about',
       currentOrigin: 'http://localhost:3000',
       configuredOrigin: 'http://{subdomain}.localhost:3001',
+      previewToken: 'preview-token',
     });
 
-    expect(result.url).toBe('http://minimal-demo.localhost:3001/about');
+    expect(result.url).toBe(
+      'http://minimal-demo.localhost:3001/api/storefront/preview?token=preview-token&path=%2Fabout',
+    );
     expect(result.note).toBeNull();
+  });
+
+  it('waits for a preview token before opening draft-only pages', () => {
+    const result = buildStorefrontPreviewUrl({
+      subdomain: 'minimal-demo',
+      path: '/about',
+      currentOrigin: 'http://localhost:3000',
+      requiresPreviewToken: true,
+    });
+
+    expect(result.url).toBeNull();
+    expect(result.note).toMatch(/preparing draft preview/i);
   });
 
   it('falls back to localhost preview hosts when no explicit origin is configured', () => {

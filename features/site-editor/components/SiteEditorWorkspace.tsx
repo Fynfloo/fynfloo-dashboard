@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import type { FormEvent } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -17,6 +17,8 @@ import {
 } from 'lucide-react';
 import { UserMenu } from '@/components/layout/UserMenu';
 import { useCurrentStore } from '@/hooks/useStore';
+import { apiRequest } from '@/lib/api';
+import type { StorefrontPreviewSession } from '@/lib/types';
 import { StorefrontPageInspector } from '@/features/settings/components/StorefrontPageInspector';
 import { StorefrontRegionInspector } from '@/features/settings/components/StorefrontRegionInspector';
 import { buildStorefrontPreviewUrl, getDefaultStorefrontEditorSelection, resolveStorefrontPreviewState } from '@/features/settings/lib/storefrontEditor';
@@ -30,6 +32,17 @@ import {
 } from '../lib/siteEditor';
 
 const CONFIGURED_PREVIEW_ORIGIN = process.env.NEXT_PUBLIC_STOREFRONT_EDITOR_ORIGIN;
+
+async function createStorefrontPreviewSession(
+  tenantId: string,
+): Promise<StorefrontPreviewSession> {
+  return apiRequest<StorefrontPreviewSession>(
+    `/api/tenant/${tenantId}/settings/storefront/preview-session`,
+    {
+      method: 'POST',
+    },
+  );
+}
 
 function subscribeToLocationOrigin(onStoreChange: () => void): () => void {
   if (typeof window === 'undefined') {
@@ -144,12 +157,33 @@ export function SiteEditorWorkspace() {
   const [createName, setCreateName] = useState('');
   const [createPath, setCreatePath] = useState('');
   const [previewRefreshKey, setPreviewRefreshKey] = useState(0);
+  const [previewSession, setPreviewSession] = useState<StorefrontPreviewSession | null>(null);
+  const [isPreviewSessionLoading, setIsPreviewSessionLoading] = useState(false);
+  const [previewSessionError, setPreviewSessionError] = useState<string | null>(null);
 
   const currentOrigin = useSyncExternalStore(
     subscribeToLocationOrigin,
     getLocationOriginSnapshot,
     () => null,
   );
+
+  const loadPreviewSession = useCallback(async () => {
+    if (!storeId) return;
+
+    setIsPreviewSessionLoading(true);
+    setPreviewSessionError(null);
+
+    try {
+      const session = await createStorefrontPreviewSession(storeId);
+      setPreviewSession(session);
+    } catch (err) {
+      const apiError = err as { message?: string };
+      setPreviewSession(null);
+      setPreviewSessionError(apiError.message ?? 'Failed to prepare draft preview');
+    } finally {
+      setIsPreviewSessionLoading(false);
+    }
+  }, [storeId]);
 
   const defaultSelection = useMemo(
     () => getDefaultStorefrontEditorSelection(pageState.pages),
@@ -210,9 +244,45 @@ export function SiteEditorWorkspace() {
         path: previewState.path,
         currentOrigin,
         configuredOrigin: CONFIGURED_PREVIEW_ORIGIN,
+        previewToken: previewSession?.token ?? null,
+        // Site editor preview should always boot through the protected
+        // storefront preview session so draft shell changes are available
+        // immediately and the iframe doesn't flash from live -> preview.
+        requiresPreviewToken:
+          Boolean(currentStore?.subdomain) || previewState.requiresPreviewToken,
       }),
-    [currentOrigin, currentStore?.subdomain, previewState.path],
+    [
+      currentOrigin,
+      currentStore?.subdomain,
+      previewSession?.token,
+      previewState.path,
+      previewState.requiresPreviewToken,
+    ],
   );
+
+  const previewSessionNote = previewSessionError
+    ? `Draft preview unavailable: ${previewSessionError}`
+    : isPreviewSessionLoading
+      ? 'Preparing draft preview session…'
+      : null;
+
+  useEffect(() => {
+    void loadPreviewSession();
+  }, [loadPreviewSession]);
+
+  useEffect(() => {
+    if (!previewSession?.expiresAt) return;
+
+    const expiresAtMs = new Date(previewSession.expiresAt).getTime();
+    if (Number.isNaN(expiresAtMs)) return;
+
+    const refreshDelayMs = Math.max(expiresAtMs - Date.now() - 60_000, 0);
+    const timer = window.setTimeout(() => {
+      void loadPreviewSession();
+    }, refreshDelayMs);
+
+    return () => window.clearTimeout(timer);
+  }, [loadPreviewSession, previewSession?.expiresAt]);
 
   useEffect(() => {
     if (!isPanelOpen || isPanelPinned) return;
@@ -890,7 +960,7 @@ export function SiteEditorWorkspace() {
                 </div>
               </div>
 
-              {(previewState.reason || previewUrl.note) && (
+              {(previewState.reason || previewSessionNote || previewUrl.note) && (
                 <div className="space-y-2 px-4 pt-4">
                   {previewState.reason && (
                     <div
@@ -902,6 +972,24 @@ export function SiteEditorWorkspace() {
                       }}
                     >
                       {previewState.reason}
+                    </div>
+                  )}
+                  {previewSessionNote && (
+                    <div
+                      className="rounded-[var(--radius-md)] border px-4 py-3 text-sm"
+                      style={{
+                        borderColor: previewSessionError
+                          ? 'rgba(239, 68, 68, 0.2)'
+                          : 'var(--bg-border-subtle)',
+                        background: previewSessionError
+                          ? 'rgba(239, 68, 68, 0.08)'
+                          : 'var(--bg-elevated)',
+                        color: previewSessionError
+                          ? 'var(--text-primary)'
+                          : 'var(--text-secondary)',
+                      }}
+                    >
+                      {previewSessionNote}
                     </div>
                   )}
                   {previewUrl.note && (

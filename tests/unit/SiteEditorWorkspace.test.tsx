@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RegionMap, StorefrontPage } from '@/lib/types';
@@ -82,6 +82,14 @@ vi.mock('@/components/layout/UserMenu', () => ({
   UserMenu: () => <div>User menu</div>,
 }));
 
+const { apiRequestMock } = vi.hoisted(() => ({
+  apiRequestMock: vi.fn(),
+}));
+
+vi.mock('@/lib/api', () => ({
+  apiRequest: apiRequestMock,
+}));
+
 vi.mock('@/features/settings/hooks/useStorefrontPages', () => ({
   useStorefrontPages: () => ({
     pages: [mockPage],
@@ -118,9 +126,18 @@ vi.mock('@/features/settings/hooks/useStorefrontRegions', () => ({
 
 import { SiteEditorWorkspace } from '@/features/site-editor/components/SiteEditorWorkspace';
 
+function buildPreviewSession() {
+  return {
+    token: 'preview-token',
+    slug: 'test-store',
+    expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+  };
+}
+
 describe('SiteEditorWorkspace', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    apiRequestMock.mockResolvedValue(buildPreviewSession());
   });
 
   it('opens the secondary panel as an overlay and allows pinning and closing it', async () => {
@@ -164,5 +181,24 @@ describe('SiteEditorWorkspace', () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save draft' })).toBeInTheDocument();
+  });
+
+  it('boots the iframe through the storefront preview route once the preview session loads', async () => {
+    render(<SiteEditorWorkspace />);
+
+    await waitFor(() => {
+      expect(apiRequestMock).toHaveBeenCalledWith(
+        '/api/tenant/store-123/settings/storefront/preview-session',
+        { method: 'POST' },
+      );
+    });
+
+    await waitFor(() => {
+      const frame = screen.getByTitle('Site editor preview');
+      expect(frame).toHaveAttribute(
+        'src',
+        'http://test-store.localhost:3000/api/storefront/preview?token=preview-token&path=%2F',
+      );
+    });
   });
 });

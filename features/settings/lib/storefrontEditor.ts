@@ -35,6 +35,7 @@ export type StorefrontPreviewState = {
   path: string;
   title: string;
   reason: string | null;
+  requiresPreviewToken: boolean;
 };
 
 const REGION_META: Array<{
@@ -153,18 +154,13 @@ export function resolveStorefrontPreviewState(
     const page = pages.find((entry) => entry.id === selection.pageId);
 
     if (page) {
-      if (page.isPublished) {
-        return {
-          path: page.path,
-          title: getStorefrontPageLabel(page),
-          reason: null,
-        };
-      }
-
       return {
-        path: getPreferredPublishedPreviewPath(pages),
+        path: page.path,
         title: getStorefrontPageLabel(page),
-        reason: 'Draft-only pages stay hidden until they are published, so the iframe falls back to a live page for now.',
+        reason: page.isPublished
+          ? null
+          : 'Draft-only pages stay hidden from public visitors. The editor uses a protected preview session to render this page safely before it is published.',
+        requiresPreviewToken: !page.isPublished,
       };
     }
   }
@@ -172,7 +168,8 @@ export function resolveStorefrontPreviewState(
   return {
     path: getPreferredPublishedPreviewPath(pages),
     title: 'Storefront shell',
-    reason: 'The iframe currently shows the live storefront while shell draft preview sessions are still being wired in.',
+    reason: null,
+    requiresPreviewToken: false,
   };
 }
 
@@ -191,6 +188,8 @@ type PreviewUrlOptions = {
   path: string;
   currentOrigin: string | null;
   configuredOrigin?: string;
+  previewToken?: string | null;
+  requiresPreviewToken?: boolean;
 };
 
 export type StorefrontPreviewUrlResult = {
@@ -198,15 +197,19 @@ export type StorefrontPreviewUrlResult = {
   note: string | null;
 };
 
-export function buildStorefrontPreviewUrl({
+type StorefrontPreviewOriginResult = {
+  origin: string | null;
+  note: string | null;
+};
+
+function resolveStorefrontPreviewOrigin({
   subdomain,
-  path,
   currentOrigin,
   configuredOrigin,
-}: PreviewUrlOptions): StorefrontPreviewUrlResult {
+}: Omit<PreviewUrlOptions, 'path' | 'previewToken' | 'requiresPreviewToken'>): StorefrontPreviewOriginResult {
   if (!subdomain) {
     return {
-      url: null,
+      origin: null,
       note: 'Storefront preview becomes available after the store context loads.',
     };
   }
@@ -217,14 +220,14 @@ export function buildStorefrontPreviewUrl({
       : configuredOrigin;
 
     return {
-      url: joinOriginAndPath(resolvedOrigin, path),
+      origin: trimTrailingSlash(resolvedOrigin),
       note: null,
     };
   }
 
   if (!currentOrigin) {
     return {
-      url: null,
+      origin: null,
       note: 'Preparing storefront preview…',
     };
   }
@@ -234,27 +237,77 @@ export function buildStorefrontPreviewUrl({
 
   if (origin.hostname === 'app.fynfloo.com' || origin.hostname.endsWith('.fynfloo.com')) {
     return {
-      url: `https://${subdomain}.fynfloo.com${path}`,
+      origin: `https://${subdomain}.fynfloo.com`,
       note: null,
     };
   }
 
   if (origin.hostname === 'lvh.me' || origin.hostname.endsWith('.lvh.me')) {
     return {
-      url: `${origin.protocol}//${subdomain}.lvh.me${port}${path}`,
+      origin: `${origin.protocol}//${subdomain}.lvh.me${port}`,
       note: 'Using the local lvh.me preview host. Set NEXT_PUBLIC_STOREFRONT_EDITOR_ORIGIN if your storefront dev server uses a different port.',
     };
   }
 
   if (origin.hostname === 'localhost' || origin.hostname.endsWith('.localhost')) {
     return {
-      url: `${origin.protocol}//${subdomain}.localhost${port}${path}`,
+      origin: `${origin.protocol}//${subdomain}.localhost${port}`,
       note: 'Using the local *.localhost preview host. Set NEXT_PUBLIC_STOREFRONT_EDITOR_ORIGIN if your storefront dev server uses a different host or port.',
     };
   }
 
   return {
-    url: null,
+    origin: null,
     note: 'Set NEXT_PUBLIC_STOREFRONT_EDITOR_ORIGIN to enable iframe preview in this environment.',
+  };
+}
+
+function buildPreviewBootstrapUrl(origin: string, token: string, path: string): string {
+  const searchParams = new URLSearchParams({
+    token,
+    path: path.startsWith('/') ? path : `/${path}`,
+  });
+
+  return `${trimTrailingSlash(origin)}/api/storefront/preview?${searchParams.toString()}`;
+}
+
+export function buildStorefrontPreviewUrl({
+  subdomain,
+  path,
+  currentOrigin,
+  configuredOrigin,
+  previewToken,
+  requiresPreviewToken = false,
+}: PreviewUrlOptions): StorefrontPreviewUrlResult {
+  const resolved = resolveStorefrontPreviewOrigin({
+    subdomain,
+    currentOrigin,
+    configuredOrigin,
+  });
+
+  if (!resolved.origin) {
+    return {
+      url: null,
+      note: resolved.note,
+    };
+  }
+
+  if (previewToken) {
+    return {
+      url: buildPreviewBootstrapUrl(resolved.origin, previewToken, path),
+      note: resolved.note,
+    };
+  }
+
+  if (requiresPreviewToken) {
+    return {
+      url: null,
+      note: 'Preparing draft preview…',
+    };
+  }
+
+  return {
+    url: joinOriginAndPath(resolved.origin, path),
+    note: resolved.note,
   };
 }
