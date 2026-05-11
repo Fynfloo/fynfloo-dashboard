@@ -286,27 +286,31 @@ export function applyEditableSectionDraft(
         },
       };
 
-    case 'content.testimonials':
+    case 'content.testimonials': {
+      const parsed = draft.testimonialsText.trim() ? parseTestimonials(draft.testimonialsText) : null;
       return {
         ...section,
         visible: draft.visible,
         data: {
           ...section.data,
           heading: draft.heading.trim(),
-          testimonials: parseTestimonials(draft.testimonialsText),
+          ...(parsed !== null && { testimonials: parsed }),
         },
       };
+    }
 
-    case 'commerce.categoryGrid':
+    case 'commerce.categoryGrid': {
+      const parsed = draft.categoriesText.trim() ? parseCategories(draft.categoriesText) : null;
       return {
         ...section,
         visible: draft.visible,
         data: {
           ...section.data,
           heading: normalizeOptionalText(draft.heading),
-          categories: parseCategories(draft.categoriesText),
+          ...(parsed !== null && { categories: parsed }),
         },
       };
+    }
 
     case 'commerce.featuredCarousel':
       return {

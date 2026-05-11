@@ -1,7 +1,13 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Eye, RefreshCw, Save } from 'lucide-react';
+import { useEffect, useMemo } from 'react';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Eye,
+  RefreshCw,
+  Save,
+} from 'lucide-react';
 import type {
   FooterBrandBlock,
   FooterLinkGroupBlock,
@@ -14,6 +20,10 @@ import type {
   StorefrontLink,
   StorefrontRegionsState,
 } from '@/lib/types';
+import {
+  useSiteEditorDraftSession,
+  type SiteEditorSaveState,
+} from '@/features/site-editor/lib/useSiteEditorDraftSession';
 
 type Fields = {
   announcementText: string;
@@ -597,7 +607,6 @@ type StorefrontRegionInspectorProps = {
   regionKey: RegionKey;
   regions: StorefrontRegionsState | null;
   isLoading: boolean;
-  isSaving: boolean;
   isPublishing: boolean;
   isDiscarding: boolean;
   error: string | null;
@@ -605,13 +614,14 @@ type StorefrontRegionInspectorProps = {
   publish: () => Promise<boolean>;
   discard: () => Promise<boolean>;
   onDirtyChange?: (hasUnsavedChanges: boolean) => void;
+  onPreviewChange?: (draft: RegionMap | null) => void;
+  onSaveStateChange?: (state: SiteEditorSaveState) => void;
 };
 
 export function StorefrontRegionInspector({
   regionKey,
   regions,
   isLoading,
-  isSaving,
   isPublishing,
   isDiscarding,
   error,
@@ -619,39 +629,57 @@ export function StorefrontRegionInspector({
   publish,
   discard,
   onDirtyChange,
+  onPreviewChange,
+  onSaveStateChange,
 }: StorefrontRegionInspectorProps) {
-  const [values, setValues] = useState<Fields>(DEFAULT_FIELDS);
-  const [saved, setSaved] = useState(false);
-
   const currentDraft = useMemo(() => regions?.draft ?? {}, [regions]);
   const baseValues = useMemo(
     () => (regions?.draft ? toFormValues(regions.draft) : DEFAULT_FIELDS),
     [regions],
   );
-
-  useEffect(() => {
-    setValues(baseValues);
-  }, [baseValues]);
+  const {
+    draft: values,
+    setDraft: setValues,
+    saveState,
+    hasPendingChanges,
+    saveNow,
+    replacePersisted,
+  } = useSiteEditorDraftSession({
+    resetKey: regionKey,
+    initialValue: baseValues,
+    serialize: serializeFields,
+    autosaveMs: 800,
+    save: async (nextValues) => {
+      const ok = await saveDraft(buildDraft(nextValues, currentDraft));
+      return ok ? { ok: true, persisted: nextValues } : { ok: false };
+    },
+  });
 
   const hasServerDraftChanges = regions?.hasUnpublishedChanges ?? false;
-  const hasUnsavedLocalChanges = serializeFields(values) !== serializeFields(baseValues);
 
   useEffect(() => {
-    onDirtyChange?.(hasUnsavedLocalChanges);
+    onDirtyChange?.(hasPendingChanges);
     return () => onDirtyChange?.(false);
-  }, [hasUnsavedLocalChanges, onDirtyChange]);
+  }, [hasPendingChanges, onDirtyChange]);
 
-  async function handleSave() {
-    const ok = await saveDraft(buildDraft(values, currentDraft));
-    if (!ok) return;
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
-  }
+  useEffect(() => {
+    onSaveStateChange?.(saveState);
+    return () => onSaveStateChange?.('idle');
+  }, [onSaveStateChange, saveState]);
+
+  useEffect(() => {
+    if (!regions?.draft) {
+      return;
+    }
+
+    onPreviewChange?.(buildDraft(values, currentDraft));
+  }, [currentDraft, onPreviewChange, regions?.draft, values]);
 
   async function handleDiscard() {
     const ok = await discard();
     if (ok) {
-      setSaved(false);
+      replacePersisted(baseValues);
+      onPreviewChange?.(null);
     }
   }
 
@@ -695,13 +723,40 @@ export function StorefrontRegionInspector({
               Live shell in sync
             </span>
           )}
-          {hasUnsavedLocalChanges && (
+          {saveState === 'saving' && (
             <span
               className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium"
               style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}
             >
               <RefreshCw className="h-3.5 w-3.5" />
-              Local edits not saved
+              Saving…
+            </span>
+          )}
+          {saveState === 'saved' && (
+            <span
+              className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium"
+              style={{ background: 'var(--green-bg)', color: 'var(--green)' }}
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Saved
+            </span>
+          )}
+          {saveState === 'dirty' && (
+            <span
+              className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium"
+              style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              Unsaved edits
+            </span>
+          )}
+          {saveState === 'error' && (
+            <span
+              className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium"
+              style={{ background: 'rgba(239, 68, 68, 0.08)', color: 'rgb(153, 27, 27)' }}
+            >
+              <AlertTriangle className="h-3.5 w-3.5" />
+              Save failed
             </span>
           )}
         </div>
@@ -709,19 +764,6 @@ export function StorefrontRegionInspector({
           {copy.description} Changes made here carry through your site anywhere this area appears.
         </p>
       </div>
-
-      {saved && (
-        <div
-          className="rounded-[var(--radius-md)] px-4 py-3 text-sm"
-          style={{
-            background: 'var(--green-bg)',
-            color: 'var(--green)',
-            border: '1px solid var(--green-border)',
-          }}
-        >
-          Shell draft saved. Publish when you&apos;re ready to push it live.
-        </div>
-      )}
 
       {error && (
         <div
@@ -737,33 +779,41 @@ export function StorefrontRegionInspector({
         </div>
       )}
 
-      {renderRegionFields(regionKey, values, (patch) => setValues((current) => ({ ...current, ...patch })))}
+      {renderRegionFields(regionKey, values, (patch) =>
+        setValues((current) => ({ ...current, ...patch })),
+      )}
 
       <div className="flex flex-wrap gap-3">
         <button
           type="button"
-          onClick={() => void handleSave()}
-          disabled={isSaving}
+          onClick={() => void saveNow()}
+          disabled={saveState === 'saving'}
           className="inline-flex items-center gap-2 rounded-[var(--radius-md)] px-4 py-2 text-sm font-medium transition-opacity"
           style={{
             background: 'var(--accent)',
             color: 'white',
-            opacity: isSaving ? 0.7 : 1,
+            opacity: saveState === 'saving' ? 0.7 : 1,
           }}
         >
           <Save className="h-4 w-4" />
-          {isSaving ? 'Saving draft…' : 'Save draft'}
+          {saveState === 'saving'
+            ? 'Saving…'
+            : saveState === 'saved'
+              ? 'Saved'
+              : saveState === 'error'
+                ? 'Retry save'
+                : 'Save now'}
         </button>
         <button
           type="button"
           onClick={() => void publish()}
-          disabled={isPublishing || !hasServerDraftChanges || hasUnsavedLocalChanges}
+          disabled={isPublishing || !hasServerDraftChanges || hasPendingChanges}
           className="inline-flex items-center gap-2 rounded-[var(--radius-md)] px-4 py-2 text-sm font-medium transition-opacity"
           style={{
             background: 'var(--bg-elevated)',
             color: 'var(--text-primary)',
             border: '1px solid var(--bg-border-subtle)',
-            opacity: isPublishing || !hasServerDraftChanges || hasUnsavedLocalChanges ? 0.6 : 1,
+            opacity: isPublishing || !hasServerDraftChanges || hasPendingChanges ? 0.6 : 1,
           }}
         >
           <Eye className="h-4 w-4" />
@@ -772,13 +822,13 @@ export function StorefrontRegionInspector({
         <button
           type="button"
           onClick={() => void handleDiscard()}
-          disabled={isDiscarding || (!hasServerDraftChanges && !hasUnsavedLocalChanges)}
+          disabled={isDiscarding || (!hasServerDraftChanges && !hasPendingChanges)}
           className="rounded-[var(--radius-md)] px-4 py-2 text-sm font-medium transition-opacity"
           style={{
             background: 'transparent',
             color: 'var(--text-secondary)',
             border: '1px solid var(--bg-border-subtle)',
-            opacity: isDiscarding || (!hasServerDraftChanges && !hasUnsavedLocalChanges) ? 0.6 : 1,
+            opacity: isDiscarding || (!hasServerDraftChanges && !hasPendingChanges) ? 0.6 : 1,
           }}
         >
           {isDiscarding ? 'Discarding…' : 'Discard draft'}

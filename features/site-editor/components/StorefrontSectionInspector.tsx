@@ -3,7 +3,6 @@
 import {
   useEffect,
   useMemo,
-  useState,
   type Dispatch,
   type InputHTMLAttributes,
   type ReactNode,
@@ -11,21 +10,26 @@ import {
   type SetStateAction,
   type TextareaHTMLAttributes,
 } from 'react';
-import { AlertTriangle, Eye, LayoutTemplate, Save } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Eye, LayoutTemplate, RefreshCw, Save } from 'lucide-react';
 import type { StorefrontSection } from '@/lib/types';
 import {
   applyEditableSectionDraft,
   buildEditableSectionDraft,
   type EditableSectionDraft,
 } from '../lib/sectionEditing';
+import {
+  useSiteEditorDraftSession,
+  type SiteEditorSaveState,
+} from '../lib/useSiteEditorDraftSession';
 
 type StorefrontSectionInspectorProps = {
   section: StorefrontSection | null;
   sectionLabel: string;
-  isSaving: boolean;
   error: string | null;
   saveDraft: (nextSection: StorefrontSection) => Promise<boolean>;
   onDirtyChange?: (hasUnsavedChanges: boolean) => void;
+  onPreviewChange?: (nextSection: StorefrontSection | null) => void;
+  onSaveStateChange?: (state: SiteEditorSaveState) => void;
 };
 
 function Field({
@@ -516,33 +520,56 @@ function renderDraftFields(
 export function StorefrontSectionInspector({
   section,
   sectionLabel,
-  isSaving,
   error,
   saveDraft,
   onDirtyChange,
+  onPreviewChange,
+  onSaveStateChange,
 }: StorefrontSectionInspectorProps) {
   const baseDraft = useMemo(
     () => (section ? buildEditableSectionDraft(section) : null),
     [section],
   );
 
-  const [draft, setDraft] = useState<EditableSectionDraft | null>(baseDraft);
+  const {
+    draft,
+    setDraft,
+    saveState,
+    hasPendingChanges,
+    saveNow,
+  } = useSiteEditorDraftSession({
+    resetKey: section?.id ?? sectionLabel,
+    initialValue: baseDraft,
+    serialize: serializeDraft,
+    autosaveMs: 700,
+    save: async (nextDraft) => {
+      if (!section || !nextDraft) {
+        return { ok: false };
+      }
 
-  const hasUnsavedChanges = serializeDraft(draft) !== serializeDraft(baseDraft);
+      const nextSection = applyEditableSectionDraft(section, nextDraft);
+      const saved = await saveDraft(nextSection);
+      return saved ? { ok: true, persisted: nextDraft } : { ok: false };
+    },
+  });
 
   useEffect(() => {
-    onDirtyChange?.(hasUnsavedChanges);
+    onDirtyChange?.(hasPendingChanges);
     return () => onDirtyChange?.(false);
-  }, [hasUnsavedChanges, onDirtyChange]);
+  }, [hasPendingChanges, onDirtyChange]);
 
-  async function handleSave() {
-    if (!section || !draft) return;
-    const nextSection = applyEditableSectionDraft(section, draft);
-    const saved = await saveDraft(nextSection);
-    if (saved) {
-      setDraft(buildEditableSectionDraft(nextSection));
+  useEffect(() => {
+    onSaveStateChange?.(saveState);
+    return () => onSaveStateChange?.('idle');
+  }, [onSaveStateChange, saveState]);
+
+  useEffect(() => {
+    if (!section || !draft) {
+      return;
     }
-  }
+
+    onPreviewChange?.(applyEditableSectionDraft(section, draft));
+  }, [draft, onPreviewChange, section]);
 
   if (!section) {
     return (
@@ -605,7 +632,20 @@ export function StorefrontSectionInspector({
           </div>
         )}
 
-        {error && (
+      {error && (
+        <div
+          className="flex items-start gap-2 rounded-[var(--radius-md)] px-3 py-2 text-sm"
+            style={{
+              background: 'rgba(239, 68, 68, 0.08)',
+              color: 'rgb(153, 27, 27)',
+            }}
+          >
+            <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        {saveState === 'error' && !error && (
           <div
             className="flex items-start gap-2 rounded-[var(--radius-md)] px-3 py-2 text-sm"
             style={{
@@ -614,7 +654,7 @@ export function StorefrontSectionInspector({
             }}
           >
             <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
-            <span>{error}</span>
+            <span>We couldn&apos;t save these changes yet. Keep editing or try again.</span>
           </div>
         )}
       </div>
@@ -632,22 +672,42 @@ export function StorefrontSectionInspector({
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-          Changes stay in draft until you publish the page.
-        </span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+            Changes stay in draft until you publish the page.
+          </span>
+          {saveState === 'saving' && (
+            <span className="inline-flex items-center gap-1 text-xs" style={{ color: 'var(--text-secondary)' }}>
+              <RefreshCw className="h-3.5 w-3.5" />
+              Saving…
+            </span>
+          )}
+          {saveState === 'saved' && (
+            <span className="inline-flex items-center gap-1 text-xs" style={{ color: 'var(--green)' }}>
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Saved
+            </span>
+          )}
+        </div>
         <button
           type="button"
-          onClick={handleSave}
-          disabled={isSaving || !hasUnsavedChanges}
+          onClick={() => void saveNow()}
+          disabled={saveState === 'saving'}
           className="inline-flex items-center gap-2 rounded-[var(--radius-md)] px-3 py-2 text-sm font-medium"
           style={{
             background: 'var(--accent)',
             color: 'white',
-            opacity: isSaving || !hasUnsavedChanges ? 0.7 : 1,
+            opacity: saveState === 'saving' ? 0.7 : 1,
           }}
         >
           <Save className="h-4 w-4" />
-          {isSaving ? 'Saving…' : 'Save changes'}
+          {saveState === 'saving'
+            ? 'Saving…'
+            : saveState === 'saved'
+              ? 'Saved'
+              : saveState === 'error'
+                ? 'Retry save'
+                : 'Save now'}
         </button>
       </div>
     </div>

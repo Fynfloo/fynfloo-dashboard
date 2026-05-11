@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { FormEvent } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
@@ -19,7 +19,7 @@ import {
 import { UserMenu } from '@/components/layout/UserMenu';
 import { useCurrentStore } from '@/hooks/useStore';
 import { apiRequest } from '@/lib/api';
-import type { StorefrontPreviewSession } from '@/lib/types';
+import type { RegionMap, StorefrontPreviewSession, StorefrontSection } from '@/lib/types';
 import { StorefrontPageInspector } from '@/features/settings/components/StorefrontPageInspector';
 import { StorefrontRegionInspector } from '@/features/settings/components/StorefrontRegionInspector';
 import { buildStorefrontPreviewUrl, getDefaultStorefrontEditorSelection, resolveStorefrontPreviewState } from '@/features/settings/lib/storefrontEditor';
@@ -34,7 +34,14 @@ import {
   type SiteEditorOutlineNode,
   type SiteEditorPanelKey,
 } from '../lib/siteEditor';
+import {
+  postSiteEditorPreviewMessage,
+  resolvePreviewMessageTargetOrigin,
+  SITE_EDITOR_PREVIEW_SOURCE,
+  type SiteEditorPreviewMessage,
+} from '../lib/previewBridge';
 import { applyHeroVariant, getHeroVariant, HERO_VARIANT_OPTIONS } from '../lib/sectionEditing';
+import type { SiteEditorSaveState } from '../lib/useSiteEditorDraftSession';
 import { StorefrontSectionInspector } from './StorefrontSectionInspector';
 
 const CONFIGURED_PREVIEW_ORIGIN = process.env.NEXT_PUBLIC_STOREFRONT_EDITOR_ORIGIN;
@@ -91,6 +98,13 @@ const PANELS: Array<{
   { key: 'blocks', label: 'Blocks', icon: LayoutTemplate },
   { key: 'theme', label: 'Theme', icon: Palette },
 ];
+
+const LIVE_PREVIEW_SECTION_TYPES = new Set<string>([
+  'hero.basic',
+  'content.textWithMedia',
+  'content.testimonials',
+  'commerce.categoryGrid',
+]);
 
 function PanelButton({
   active,
@@ -239,12 +253,22 @@ export function SiteEditorWorkspace() {
   const [createName, setCreateName] = useState('');
   const [createPath, setCreatePath] = useState('');
   const [previewRefreshKey, setPreviewRefreshKey] = useState(0);
+  const previewFrameRef = useRef<HTMLIFrameElement | null>(null);
   const [previewSession, setPreviewSession] = useState<StorefrontPreviewSession | null>(null);
   const [isPreviewSessionLoading, setIsPreviewSessionLoading] = useState(false);
   const [previewSessionError, setPreviewSessionError] = useState<string | null>(null);
+  const [isPreviewFrameLoaded, setIsPreviewFrameLoaded] = useState(false);
+  const [isPreviewBridgeReady, setIsPreviewBridgeReady] = useState(false);
+  const [previewSectionOverrides, setPreviewSectionOverrides] = useState<
+    Record<string, StorefrontSection>
+  >({});
+  const [previewRegionOverrides, setPreviewRegionOverrides] = useState<RegionMap | null>(null);
   const [hasUnsavedInspectorChanges, setHasUnsavedInspectorChanges] = useState(false);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   const [isUnsavedDialogOpen, setIsUnsavedDialogOpen] = useState(false);
+  const [inspectorSaveState, setInspectorSaveState] = useState<SiteEditorSaveState>('idle');
+  const pendingNonLiveRefreshRef = useRef(false);
+  const prevInspectorSaveStateRef = useRef<SiteEditorSaveState>('idle');
 
   const currentOrigin = useSyncExternalStore(
     subscribeToLocationOrigin,
@@ -366,6 +390,11 @@ export function SiteEditorWorkspace() {
       ? 'Opening your site view…'
       : null;
 
+  const previewMessagingOrigin = useMemo(
+    () => resolvePreviewMessageTargetOrigin(previewUrl.url),
+    [previewUrl.url],
+  );
+
   useEffect(() => {
     void loadPreviewSession();
   }, [loadPreviewSession]);
@@ -383,6 +412,44 @@ export function SiteEditorWorkspace() {
 
     return () => window.clearTimeout(timer);
   }, [loadPreviewSession, previewSession?.expiresAt]);
+
+  useEffect(() => {
+    setIsPreviewFrameLoaded(false);
+    setIsPreviewBridgeReady(false);
+  }, [previewRefreshKey, previewUrl.url]);
+
+  useEffect(() => {
+    if (!previewMessagingOrigin) {
+      return;
+    }
+
+    function handlePreviewMessage(event: MessageEvent<SiteEditorPreviewMessage>) {
+      if (event.origin !== previewMessagingOrigin) {
+        return;
+      }
+
+      if (event.source !== previewFrameRef.current?.contentWindow) {
+        return;
+      }
+
+      if (!event.data || event.data.source !== SITE_EDITOR_PREVIEW_SOURCE) {
+        return;
+      }
+
+      if (event.data.type === 'site-editor:ready') {
+        setIsPreviewBridgeReady(true);
+        return;
+      }
+
+      if (event.data.type === 'site-editor:node-click') {
+        setSelectedOutlineNodeId(event.data.nodeId);
+        return;
+      }
+    }
+
+    window.addEventListener('message', handlePreviewMessage);
+    return () => window.removeEventListener('message', handlePreviewMessage);
+  }, [previewMessagingOrigin]);
 
   useEffect(() => {
     if (!effectivePageId) return;
@@ -422,6 +489,91 @@ export function SiteEditorWorkspace() {
     [activePanel],
   );
 
+  useEffect(() => {
+    const prev = prevInspectorSaveStateRef.current;
+    prevInspectorSaveStateRef.current = inspectorSaveState;
+
+    if (prev === 'saving' && inspectorSaveState === 'saved' && pendingNonLiveRefreshRef.current) {
+      pendingNonLiveRefreshRef.current = false;
+      setPreviewRefreshKey((k) => k + 1);
+    }
+  }, [inspectorSaveState]);
+
+  const inspectorSaveBadge = useMemo(() => {
+    switch (inspectorSaveState) {
+      case 'saving':
+        return {
+          label: 'Saving…',
+          style: { background: 'var(--bg-elevated)', color: 'var(--text-secondary)' },
+        };
+      case 'saved':
+        return {
+          label: 'Saved',
+          style: { background: 'var(--green-bg)', color: 'var(--green)' },
+        };
+      case 'dirty':
+        return {
+          label: 'Unsaved edits',
+          style: { background: 'var(--bg-elevated)', color: 'var(--text-secondary)' },
+        };
+      case 'error':
+        return {
+          label: 'Save failed',
+          style: { background: 'rgba(239, 68, 68, 0.08)', color: 'rgb(153, 27, 27)' },
+        };
+      default:
+        return null;
+    }
+  }, [inspectorSaveState]);
+
+  useEffect(() => {
+    if (!isPreviewFrameLoaded || !isPreviewBridgeReady) {
+      return;
+    }
+
+    postSiteEditorPreviewMessage(
+      previewFrameRef.current?.contentWindow ?? null,
+      previewMessagingOrigin,
+      {
+        source: SITE_EDITOR_PREVIEW_SOURCE,
+        type: 'site-editor:select-node',
+        nodeId: selectedOutlineNode?.id ?? null,
+      },
+    );
+  }, [isPreviewBridgeReady, isPreviewFrameLoaded, previewMessagingOrigin, selectedOutlineNode?.id]);
+
+  useEffect(() => {
+    if (!isPreviewFrameLoaded || !isPreviewBridgeReady) {
+      return;
+    }
+
+    const targetWindow = previewFrameRef.current?.contentWindow ?? null;
+    Object.entries(previewSectionOverrides).forEach(([nodeId, section]) => {
+      postSiteEditorPreviewMessage(targetWindow, previewMessagingOrigin, {
+        source: SITE_EDITOR_PREVIEW_SOURCE,
+        type: 'site-editor:preview-section',
+        nodeId,
+        section,
+      });
+    });
+  }, [isPreviewBridgeReady, isPreviewFrameLoaded, previewMessagingOrigin, previewSectionOverrides]);
+
+  useEffect(() => {
+    if (!isPreviewFrameLoaded || !isPreviewBridgeReady) {
+      return;
+    }
+
+    postSiteEditorPreviewMessage(
+      previewFrameRef.current?.contentWindow ?? null,
+      previewMessagingOrigin,
+      {
+        source: SITE_EDITOR_PREVIEW_SOURCE,
+        type: 'site-editor:preview-regions',
+        regions: previewRegionOverrides,
+      },
+    );
+  }, [isPreviewBridgeReady, isPreviewFrameLoaded, previewMessagingOrigin, previewRegionOverrides]);
+
   function requestNavigation(action: () => void) {
     if (hasUnsavedInspectorChanges) {
       setPendingAction(() => action);
@@ -442,6 +594,8 @@ export function SiteEditorWorkspace() {
     setPendingAction(null);
     setIsUnsavedDialogOpen(false);
     setHasUnsavedInspectorChanges(false);
+    clearPreviewOverrides();
+    refreshPreview();
     action?.();
   }
 
@@ -521,21 +675,22 @@ export function SiteEditorWorkspace() {
     setPreviewRefreshKey((current) => current + 1);
   }
 
+  function clearPreviewOverrides() {
+    setPreviewSectionOverrides({});
+    setPreviewRegionOverrides(null);
+  }
+
   async function handlePageSaveDraft(
     pageId: string,
     input: Parameters<typeof pageState.saveDraft>[1],
   ) {
-    const result = await pageState.saveDraft(pageId, input);
-    if (result) {
-      refreshPreview();
-    }
-
-    return result;
+    return pageState.saveDraft(pageId, input);
   }
 
   async function handlePagePublish(pageId: string) {
     const result = await pageState.publish(pageId);
     if (result) {
+      clearPreviewOverrides();
       refreshPreview();
     }
 
@@ -545,6 +700,7 @@ export function SiteEditorWorkspace() {
   async function handlePageDiscard(pageId: string) {
     const result = await pageState.discard(pageId);
     if (result) {
+      clearPreviewOverrides();
       refreshPreview();
     }
 
@@ -552,17 +708,13 @@ export function SiteEditorWorkspace() {
   }
 
   async function handleRegionSaveDraft(draft: Parameters<typeof regionState.saveDraft>[0]) {
-    const ok = await regionState.saveDraft(draft);
-    if (ok) {
-      refreshPreview();
-    }
-
-    return ok;
+    return regionState.saveDraft(draft);
   }
 
   async function handleRegionPublish() {
     const ok = await regionState.publish();
     if (ok) {
+      clearPreviewOverrides();
       refreshPreview();
     }
 
@@ -572,6 +724,7 @@ export function SiteEditorWorkspace() {
   async function handleRegionDiscard() {
     const ok = await regionState.discard();
     if (ok) {
+      clearPreviewOverrides();
       refreshPreview();
     }
 
@@ -591,6 +744,17 @@ export function SiteEditorWorkspace() {
       layout: nextLayout,
     });
 
+    if (result && selectedOutlineNode?.type === 'section') {
+      setPreviewSectionOverrides((current) => ({
+        ...current,
+        [selectedOutlineNode.id]: nextSection,
+      }));
+
+      if (!LIVE_PREVIEW_SECTION_TYPES.has(nextSection.type)) {
+        pendingNonLiveRefreshRef.current = true;
+      }
+    }
+
     return Boolean(result);
   }
 
@@ -600,8 +764,34 @@ export function SiteEditorWorkspace() {
     }
 
     const nextSection = applyHeroVariant(selectedSection, variant);
+
+    if (selectedOutlineNode?.type === 'section') {
+      setPreviewSectionOverrides((current) => ({
+        ...current,
+        [selectedOutlineNode.id]: nextSection,
+      }));
+    }
+
     await handleSectionSaveDraft(nextSection);
   }
+
+  const handleSectionPreviewChange = useCallback(
+    (nextSection: StorefrontSection | null) => {
+      if (!nextSection || selectedOutlineNode?.type !== 'section') {
+        return;
+      }
+
+      setPreviewSectionOverrides((current) => ({
+        ...current,
+        [selectedOutlineNode.id]: nextSection,
+      }));
+    },
+    [selectedOutlineNode],
+  );
+
+  const handleRegionPreviewChange = useCallback((nextDraft: RegionMap | null) => {
+    setPreviewRegionOverrides(nextDraft);
+  }, []);
 
   function renderNavigatorPanel() {
     return (
@@ -968,10 +1158,10 @@ export function SiteEditorWorkspace() {
     if (selectedSharedRegionKey) {
       return (
         <StorefrontRegionInspector
+          key={selectedSharedRegionKey}
           regionKey={selectedSharedRegionKey}
           regions={regionState.regions}
           isLoading={regionState.isLoading}
-          isSaving={regionState.isSaving}
           isPublishing={regionState.isPublishing}
           isDiscarding={regionState.isDiscarding}
           error={regionState.error}
@@ -979,6 +1169,8 @@ export function SiteEditorWorkspace() {
           publish={handleRegionPublish}
           discard={handleRegionDiscard}
           onDirtyChange={setHasUnsavedInspectorChanges}
+          onPreviewChange={handleRegionPreviewChange}
+          onSaveStateChange={setInspectorSaveState}
         />
       );
     }
@@ -989,19 +1181,20 @@ export function SiteEditorWorkspace() {
           key={selectedOutlineNode?.id ?? 'section'}
           section={selectedSection}
           sectionLabel={selectedOutlineNode?.label ?? 'Section'}
-          isSaving={pageState.isSaving}
           error={pageState.error}
           saveDraft={handleSectionSaveDraft}
           onDirtyChange={setHasUnsavedInspectorChanges}
+          onPreviewChange={handleSectionPreviewChange}
+          onSaveStateChange={setInspectorSaveState}
         />
       );
     }
 
     return (
       <StorefrontPageInspector
+        key={selectedPage?.id ?? 'page'}
         page={selectedPage}
         isLoading={pageState.isLoading}
-        isSaving={pageState.isSaving}
         isPublishing={pageState.isPublishing}
         isDiscarding={pageState.isDiscarding}
         error={pageState.error}
@@ -1009,6 +1202,7 @@ export function SiteEditorWorkspace() {
         publish={handlePagePublish}
         discard={handlePageDiscard}
         onDirtyChange={setHasUnsavedInspectorChanges}
+        onSaveStateChange={setInspectorSaveState}
       />
     );
   }
@@ -1060,6 +1254,14 @@ export function SiteEditorWorkspace() {
         </div>
 
         <div className="flex items-center gap-3">
+          {inspectorSaveBadge && (
+            <span
+              className="rounded-full px-2.5 py-1 text-xs font-medium"
+              style={inspectorSaveBadge.style}
+            >
+              {inspectorSaveBadge.label}
+            </span>
+          )}
           {previewUrl.url && (
             <button
               type="button"
@@ -1232,7 +1434,7 @@ export function SiteEditorWorkspace() {
                     Site view
                   </div>
                   <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                    Changes appear here as you move through the site.
+                    Draft changes appear here as you edit.
                   </div>
                 </div>
                 <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
@@ -1295,8 +1497,10 @@ export function SiteEditorWorkspace() {
                   {previewUrl.url ? (
                     <iframe
                       key={`${previewUrl.url}:${previewRefreshKey}`}
+                      ref={previewFrameRef}
                       title="Site editor preview"
                       src={previewUrl.url}
+                      onLoad={() => setIsPreviewFrameLoaded(true)}
                       className="h-full w-full bg-white"
                     />
                   ) : (

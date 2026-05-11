@@ -129,7 +129,6 @@ export function StorefrontEditorShell() {
           regionKey={effectiveSelection.regionKey}
           regions={regionState.regions}
           isLoading={regionState.isLoading}
-          isSaving={regionState.isSaving}
           isPublishing={regionState.isPublishing}
           isDiscarding={regionState.isDiscarding}
           error={regionState.error}
@@ -144,7 +143,6 @@ export function StorefrontEditorShell() {
       <StorefrontPageInspector
         page={selectedPage}
         isLoading={pageState.isLoading}
-        isSaving={pageState.isSaving}
         isPublishing={pageState.isPublishing}
         isDiscarding={pageState.isDiscarding}
         error={pageState.error}

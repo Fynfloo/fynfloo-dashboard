@@ -1,9 +1,13 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, FileText, Globe, Save } from 'lucide-react';
+import { useEffect, useMemo } from 'react';
+import { AlertTriangle, CheckCircle2, FileText, Globe, RefreshCw, Save } from 'lucide-react';
 import type { StorefrontPage, UpdateStorefrontPageDraftInput } from '@/lib/types';
 import { getStorefrontPageLabel } from '../lib/storefrontEditor';
+import {
+  useSiteEditorDraftSession,
+  type SiteEditorSaveState,
+} from '@/features/site-editor/lib/useSiteEditorDraftSession';
 
 type DraftFields = {
   name: string;
@@ -65,7 +69,6 @@ function serializeDraft(values: DraftFields): string {
 type StorefrontPageInspectorProps = {
   page: StorefrontPage | null;
   isLoading: boolean;
-  isSaving: boolean;
   isPublishing: boolean;
   isDiscarding: boolean;
   error: string | null;
@@ -76,12 +79,12 @@ type StorefrontPageInspectorProps = {
   publish: (pageId: string) => Promise<StorefrontPage | null>;
   discard: (pageId: string) => Promise<{ deleted: false; page: StorefrontPage } | { deleted: true; pageId: string } | null>;
   onDirtyChange?: (hasUnsavedChanges: boolean) => void;
+  onSaveStateChange?: (state: SiteEditorSaveState) => void;
 };
 
 export function StorefrontPageInspector({
   page,
   isLoading,
-  isSaving,
   isPublishing,
   isDiscarding,
   error,
@@ -89,53 +92,71 @@ export function StorefrontPageInspector({
   publish,
   discard,
   onDirtyChange,
+  onSaveStateChange,
 }: StorefrontPageInspectorProps) {
-  const [draft, setDraft] = useState<DraftFields>(EMPTY_DRAFT);
-
-  useEffect(() => {
-    setDraft(toDraftFields(page));
-  }, [page]);
-
   const baseDraft = useMemo(() => toDraftFields(page), [page]);
-  const hasUnsavedChanges = serializeDraft(draft) !== serializeDraft(baseDraft);
+  const {
+    draft,
+    setDraft,
+    saveState,
+    hasPendingChanges,
+    saveNow,
+    replacePersisted,
+  } = useSiteEditorDraftSession({
+    resetKey: page?.id ?? 'page:empty',
+    initialValue: baseDraft,
+    serialize: serializeDraft,
+    autosaveMs: 800,
+    save: async (nextDraft) => {
+      if (!page) {
+        return { ok: false };
+      }
+
+      const result = await saveDraft(page.id, {
+        ...(page.pageClass === 'content' && !page.isPublished
+          ? {
+              name: nextDraft.name,
+              path: nextDraft.path,
+            }
+          : {}),
+        seoTitle: nextDraft.seoTitle || null,
+        seoDescription: nextDraft.seoDescription || null,
+      });
+
+      return result
+        ? { ok: true, persisted: toDraftFields(result) }
+        : { ok: false };
+    },
+  });
 
   useEffect(() => {
-    onDirtyChange?.(hasUnsavedChanges);
+    onDirtyChange?.(hasPendingChanges);
     return () => onDirtyChange?.(false);
-  }, [hasUnsavedChanges, onDirtyChange]);
+  }, [hasPendingChanges, onDirtyChange]);
 
-  async function handleSaveDraft() {
-    if (!page) return;
-
-    const result = await saveDraft(page.id, {
-      ...(page.pageClass === 'content' && !page.isPublished
-        ? {
-            name: draft.name,
-            path: draft.path,
-          }
-        : {}),
-      seoTitle: draft.seoTitle || null,
-      seoDescription: draft.seoDescription || null,
-    });
-
-    if (result) {
-      setDraft(toDraftFields(result));
-    }
-  }
+  useEffect(() => {
+    onSaveStateChange?.(saveState);
+    return () => onSaveStateChange?.('idle');
+  }, [onSaveStateChange, saveState]);
 
   async function handlePublish() {
     if (!page) return;
     const result = await publish(page.id);
     if (result) {
-      setDraft(toDraftFields(result));
+      replacePersisted(toDraftFields(result));
     }
   }
 
   async function handleDiscard() {
     if (!page) return;
     const result = await discard(page.id);
-    if (!result || result.deleted) return;
-    setDraft(toDraftFields(result.page));
+    if (!result) return;
+    if (result.deleted) {
+      replacePersisted(EMPTY_DRAFT);
+      return;
+    }
+
+    replacePersisted(toDraftFields(result.page));
   }
 
   if (isLoading) {
@@ -198,26 +219,6 @@ export function StorefrontPageInspector({
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <span
-            className="rounded-full px-2 py-0.5 text-[11px] font-medium"
-            style={{
-              background:
-                page.pageClass === 'system'
-                  ? 'rgba(148, 163, 184, 0.12)'
-                  : page.pageClass === 'capability'
-                    ? 'rgba(168, 85, 247, 0.12)'
-                    : 'rgba(59, 130, 246, 0.12)',
-              color: 'var(--text-secondary)',
-            }}
-          >
-            {page.pageClass}
-          </span>
-          <span
-            className="rounded-full px-2 py-0.5 text-[11px] font-medium"
-            style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}
-          >
-            {page.kind}
-          </span>
           {!page.isPublished && (
             <span
               className="rounded-full px-2 py-0.5 text-[11px] font-medium"
@@ -234,12 +235,38 @@ export function StorefrontPageInspector({
               draft changes
             </span>
           )}
-          {hasUnsavedChanges && (
+          {saveState === 'saving' && (
             <span
               className="rounded-full px-2 py-0.5 text-[11px] font-medium"
               style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}
             >
-              local edits not saved
+              <RefreshCw className="mr-1 inline h-3 w-3" />
+              Saving…
+            </span>
+          )}
+          {saveState === 'saved' && (
+            <span
+              className="rounded-full px-2 py-0.5 text-[11px] font-medium"
+              style={{ background: 'var(--green-bg)', color: 'var(--green)' }}
+            >
+              <CheckCircle2 className="mr-1 inline h-3 w-3" />
+              Saved
+            </span>
+          )}
+          {saveState === 'dirty' && (
+            <span
+              className="rounded-full px-2 py-0.5 text-[11px] font-medium"
+              style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}
+            >
+              Unsaved edits
+            </span>
+          )}
+          {saveState === 'error' && (
+            <span
+              className="rounded-full px-2 py-0.5 text-[11px] font-medium"
+              style={{ background: 'rgba(239, 68, 68, 0.08)', color: 'rgb(153, 27, 27)' }}
+            >
+              Save failed
             </span>
           )}
         </div>
@@ -316,24 +343,34 @@ export function StorefrontPageInspector({
       <div className="flex flex-wrap gap-3">
         <button
           type="button"
-          onClick={() => void handleSaveDraft()}
-          disabled={isSaving}
+          onClick={() => void saveNow()}
+          disabled={saveState === 'saving'}
           className="inline-flex items-center gap-2 rounded-[var(--radius-md)] px-4 py-2 text-sm font-medium"
-          style={{ background: 'var(--accent)', color: 'white', opacity: isSaving ? 0.7 : 1 }}
+          style={{
+            background: 'var(--accent)',
+            color: 'white',
+            opacity: saveState === 'saving' ? 0.7 : 1,
+          }}
         >
           <Save className="h-4 w-4" />
-          {isSaving ? 'Saving…' : 'Save draft'}
+          {saveState === 'saving'
+            ? 'Saving…'
+            : saveState === 'saved'
+              ? 'Saved'
+              : saveState === 'error'
+                ? 'Retry save'
+                : 'Save now'}
         </button>
         <button
           type="button"
           onClick={() => void handlePublish()}
-          disabled={isPublishing || hasUnsavedChanges}
+          disabled={isPublishing || hasPendingChanges}
           className="inline-flex items-center gap-2 rounded-[var(--radius-md)] px-4 py-2 text-sm font-medium"
           style={{
             border: '1px solid var(--bg-border-subtle)',
             background: 'var(--bg-surface)',
             color: 'var(--text-primary)',
-            opacity: isPublishing || hasUnsavedChanges ? 0.7 : 1,
+            opacity: isPublishing || hasPendingChanges ? 0.7 : 1,
           }}
         >
           {isPublishing ? 'Publishing…' : page.isPublished ? 'Publish changes' : 'Publish page'}

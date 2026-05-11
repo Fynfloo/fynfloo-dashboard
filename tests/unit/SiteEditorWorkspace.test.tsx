@@ -258,7 +258,7 @@ describe('SiteEditorWorkspace', () => {
         'Short promo text shown at the very top of your site. Changes made here carry through your site anywhere this area appears.',
       ),
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Save draft' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save now' })).toBeInTheDocument();
   });
 
   it('opens a real section inspector when a page section is selected', async () => {
@@ -273,7 +273,7 @@ describe('SiteEditorWorkspace', () => {
       screen.getByText('Update the content and settings for this part of the page.'),
     ).toBeInTheDocument();
     expect(screen.getByDisplayValue('Summer essentials')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save now' })).toBeInTheDocument();
   });
 
   it('saves a new hero layout from the blocks view', async () => {
@@ -346,4 +346,5 @@ describe('SiteEditorWorkspace', () => {
       );
     });
   });
+
 });
