@@ -97,6 +97,10 @@ export function useSiteEditorDraftSession<T>({
       return;
     }
 
+    if (valuesMatch(serializeRef.current, persistedRef.current, initialValue)) {
+      return;
+    }
+
     replacePersisted(initialValue);
   }, [initialValue, replacePersisted, resetKey]);
 
@@ -174,7 +178,7 @@ export function useSiteEditorDraftSession<T>({
     }
 
     inFlightRef.current = true;
-    let completedSuccessfully = true;
+    let completedSuccessfully = false;
 
     try {
       do {
@@ -191,7 +195,6 @@ export function useSiteEditorDraftSession<T>({
 
         if (!result.ok) {
           setSaveState('error');
-          completedSuccessfully = false;
           return false;
         }
 
@@ -214,10 +217,11 @@ export function useSiteEditorDraftSession<T>({
         !valuesMatch(serialize, draftRef.current, persistedRef.current)
       );
 
+      completedSuccessfully = true;
       return true;
     } finally {
       inFlightRef.current = false;
-      if (!completedSuccessfully && !valuesMatch(serialize, draftRef.current, persistedRef.current)) {
+      if (!completedSuccessfully && mountedRef.current) {
         setSaveState('error');
       }
     }

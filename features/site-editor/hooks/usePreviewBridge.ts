@@ -10,6 +10,10 @@ import {
 import type { SiteEditorOutlineNode } from '../lib/siteEditor';
 import type { SiteEditorSaveState } from '../lib/useSiteEditorDraftSession';
 
+// Only section types whose client components can re-render from section.data alone
+// (no async product fetches, no page-level context). Commerce sections that need
+// products (featuredCarousel, productGrid, productHero, productSpecs, relatedProducts)
+// use the non-live path: save triggers an iframe reload via scheduleNonLiveRefresh.
 const LIVE_PREVIEW_SECTION_TYPES = new Set<string>([
   'hero.basic',
   'content.textWithMedia',
@@ -37,6 +41,7 @@ export function usePreviewBridge({
   // Key-based loaded/ready tracking: derive boolean from whether the "last confirmed" key
   // matches the current stable key. Avoids setState-in-effect reset pattern.
   const stableKey = `${previewUrlStr ?? ''}:${previewRefreshKey}`;
+  const stableKeyRef = useRef(stableKey);
 
   const [frameLoadedKey, setFrameLoadedKey] = useState('');
   const [bridgeReadyKey, setBridgeReadyKey] = useState('');
@@ -53,6 +58,10 @@ export function usePreviewBridge({
   const prevInspectorSaveStateRef = useRef<SiteEditorSaveState>('idle');
 
   useEffect(() => {
+    stableKeyRef.current = stableKey;
+  }, [stableKey]);
+
+  useEffect(() => {
     if (!previewMessagingOrigin) return;
 
     function handleMessage(event: MessageEvent<SiteEditorPreviewMessage>) {
@@ -61,7 +70,7 @@ export function usePreviewBridge({
       if (!event.data || event.data.source !== SITE_EDITOR_PREVIEW_SOURCE) return;
 
       if (event.data.type === 'site-editor:ready') {
-        setBridgeReadyKey(stableKey);
+        setBridgeReadyKey(stableKeyRef.current);
         return;
       }
 
@@ -116,7 +125,12 @@ export function usePreviewBridge({
   useEffect(() => {
     const prev = prevInspectorSaveStateRef.current;
     prevInspectorSaveStateRef.current = inspectorSaveState;
-    if (prev === 'saving' && inspectorSaveState === 'saved' && pendingNonLiveRefreshRef.current) {
+    if (
+      prev === 'saving' &&
+      inspectorSaveState !== 'saving' &&
+      inspectorSaveState !== 'error' &&
+      pendingNonLiveRefreshRef.current
+    ) {
       pendingNonLiveRefreshRef.current = false;
       refreshPreview();
     }
@@ -150,8 +164,8 @@ export function usePreviewBridge({
   }, []);
 
   const setIsPreviewFrameLoaded = useCallback(() => {
-    setFrameLoadedKey(stableKey);
-  }, [stableKey]);
+    setFrameLoadedKey(stableKeyRef.current);
+  }, []);
 
   return {
     previewFrameRef,

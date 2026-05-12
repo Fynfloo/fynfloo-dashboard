@@ -50,6 +50,23 @@ export type EditableSectionDraft =
       subheading: string;
       collectionHandle: string;
       columns: number;
+    }
+  | {
+      type: 'commerce.productHero';
+      visible: boolean;
+      showBreadcrumbs: boolean;
+      showBadges: boolean;
+    }
+  | {
+      type: 'commerce.productSpecs';
+      visible: boolean;
+      showDescription: boolean;
+      showDetailsList: boolean;
+    }
+  | {
+      type: 'commerce.relatedProducts';
+      visible: boolean;
+      heading: string;
     };
 
 export type HeroVariantOption = {

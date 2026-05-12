@@ -514,6 +514,79 @@ function renderDraftFields(
           </div>
         </>
       );
+
+    case 'commerce.productHero':
+      return (
+        <>
+          <Toggle
+            checked={draft.showBreadcrumbs}
+            onChange={(showBreadcrumbs) =>
+              setDraft((current) =>
+                current && current.type === 'commerce.productHero'
+                  ? { ...current, showBreadcrumbs }
+                  : current,
+              )
+            }
+            label="Show breadcrumb navigation"
+          />
+          <Toggle
+            checked={draft.showBadges}
+            onChange={(showBadges) =>
+              setDraft((current) =>
+                current && current.type === 'commerce.productHero'
+                  ? { ...current, showBadges }
+                  : current,
+              )
+            }
+            label="Show stock badges"
+          />
+        </>
+      );
+
+    case 'commerce.productSpecs':
+      return (
+        <>
+          <Toggle
+            checked={draft.showDescription}
+            onChange={(showDescription) =>
+              setDraft((current) =>
+                current && current.type === 'commerce.productSpecs'
+                  ? { ...current, showDescription }
+                  : current,
+              )
+            }
+            label="Show product description"
+          />
+          <Toggle
+            checked={draft.showDetailsList}
+            onChange={(showDetailsList) =>
+              setDraft((current) =>
+                current && current.type === 'commerce.productSpecs'
+                  ? { ...current, showDetailsList }
+                  : current,
+              )
+            }
+            label="Show details list"
+          />
+        </>
+      );
+
+    case 'commerce.relatedProducts':
+      return (
+        <Field label="Heading">
+          <TextInput
+            value={draft.heading}
+            onChange={(event) =>
+              setDraft((current) =>
+                current && current.type === 'commerce.relatedProducts'
+                  ? { ...current, heading: event.target.value }
+                  : current,
+              )
+            }
+            placeholder="You may also like"
+          />
+        </Field>
+      );
   }
 }
 

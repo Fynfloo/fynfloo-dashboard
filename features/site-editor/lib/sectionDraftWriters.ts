@@ -133,6 +133,38 @@ export function applyEditableSectionDraft(
           columns: Math.min(4, Math.max(1, Math.round(draft.columns))),
         },
       };
+
+    case 'commerce.productHero':
+      return {
+        ...section,
+        visible: draft.visible,
+        data: {
+          ...section.data,
+          showBreadcrumbs: draft.showBreadcrumbs,
+          showBadges: draft.showBadges,
+        },
+      };
+
+    case 'commerce.productSpecs':
+      return {
+        ...section,
+        visible: draft.visible,
+        data: {
+          ...section.data,
+          showDescription: draft.showDescription,
+          showDetailsList: draft.showDetailsList,
+        },
+      };
+
+    case 'commerce.relatedProducts':
+      return {
+        ...section,
+        visible: draft.visible,
+        data: {
+          ...section.data,
+          heading: draft.heading.trim() || 'You may also like',
+        },
+      };
   }
 }
 

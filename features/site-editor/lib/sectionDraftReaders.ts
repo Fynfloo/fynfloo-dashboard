@@ -126,6 +126,29 @@ export function buildEditableSectionDraft(
         columns: readNumber(section.data, 'columns', 4),
       };
 
+    case 'commerce.productHero':
+      return {
+        type: 'commerce.productHero',
+        visible,
+        showBreadcrumbs: readBoolean(section.data['showBreadcrumbs'], true),
+        showBadges: readBoolean(section.data['showBadges'], true),
+      };
+
+    case 'commerce.productSpecs':
+      return {
+        type: 'commerce.productSpecs',
+        visible,
+        showDescription: readBoolean(section.data['showDescription'], true),
+        showDetailsList: readBoolean(section.data['showDetailsList'], true),
+      };
+
+    case 'commerce.relatedProducts':
+      return {
+        type: 'commerce.relatedProducts',
+        visible,
+        heading: readString(section.data, 'heading'),
+      };
+
     default:
       return null;
   }
