@@ -10,17 +10,17 @@ import { useAuthStore } from '@/store/auth.store';
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
+  const stores = useAuthStore((s) => s.stores);
   const isInitialised = useAuthStore((s) => s.isInitialised);
   const isLoading = useAuthStore((s) => s.isLoading);
 
   useEffect(() => {
     if (!isInitialised) return;
-    if (!user) {
-      router.replace('/login');
-    }
-  }, [isInitialised, user]);
+    if (!user) { router.replace('/login'); return; }
+    if (stores.length === 0) { router.replace('/onboarding'); return; }
+  }, [isInitialised, user, stores]);
 
-  // Show nothing until auth is confirmed — prevents flash
+  // Wait for auth — prevents any flash
   if (!isInitialised || isLoading) {
     return (
       <div
@@ -29,17 +29,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       >
         <div
           className="w-6 h-6 rounded-full border-2 animate-spin"
-          style={{
-            borderColor: 'var(--accent)',
-            borderTopColor: 'transparent',
-          }}
+          style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }}
         />
       </div>
     );
   }
 
-  // Not authenticated — render nothing while redirect fires
-  if (!user) return null;
+  // Render nothing while redirects fire
+  if (!user || stores.length === 0) return null;
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: 'var(--bg-base)' }}>

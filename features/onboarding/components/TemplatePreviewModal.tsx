@@ -10,7 +10,7 @@ type Props = {
 
 export function TemplatePreviewModal({ template, onClose, onSelect }: Props) {
   return (
-    <div className="fixed inset-0 z-50 flex flex-col" style={{ background: 'var(--bg-base)' }}>
+    <div className="fixed inset-0 z-[60] flex flex-col" style={{ background: 'var(--bg-base)' }}>
       {/* Top bar */}
       <div
         className="flex items-center justify-between px-4 h-12 shrink-0"

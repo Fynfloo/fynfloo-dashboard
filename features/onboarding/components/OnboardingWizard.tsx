@@ -2,9 +2,11 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { StepStoreName } from './StepStoreName';
-import { StepTemplate } from './StepTemplate';
+import { TemplateGalleryModal } from './TemplateGalleryModal';
 import { BuildingScreen } from './BuildingScreen';
 import { useOnboarding } from '../hooks/useOnboarding';
+import { useTemplates } from '../hooks/useTemplates';
+import type { TemplateItem } from '../hooks/useTemplates';
 
 type OnboardingData = {
   storeName: string;
@@ -17,6 +19,8 @@ type Step = 'name' | 'template' | 'building';
 export function OnboardingWizard() {
   const router = useRouter();
   const { createBusiness } = useOnboarding();
+  const { templates, isLoading: templatesLoading } = useTemplates();
+
   const [step, setStep] = useState<Step>('name');
   const [data, setData] = useState<OnboardingData>({
     storeName: '',
@@ -30,13 +34,8 @@ export function OnboardingWizard() {
     setStep('template');
   }
 
-  function goBack() {
-    setStep('name');
-    setError('');
-  }
-
-  async function finish(templateKey: string) {
-    const final = { ...data, templateKey };
+  async function finish(template: TemplateItem) {
+    const final = { ...data, templateKey: template.key };
     setData(final);
     setStep('building');
     setError('');
@@ -50,6 +49,19 @@ export function OnboardingWizard() {
     }
   }
 
+  if (step === 'template') {
+    return (
+      <TemplateGalleryModal
+        templates={templates}
+        isLoading={templatesLoading}
+        selectedKey={data.templateKey}
+        onSelect={finish}
+        onBack={() => setStep('name')}
+        error={error}
+      />
+    );
+  }
+
   if (step === 'building') return <BuildingScreen businessName={data.storeName} />;
 
   return (
@@ -58,10 +70,10 @@ export function OnboardingWizard() {
       <div className="mb-8 space-y-3">
         <div className="flex items-center justify-between">
           <p className="text-xs font-medium" style={{ color: 'var(--text-tertiary)' }}>
-            Step {step === 'name' ? 1 : 2} of 2
+            Step 1 of 2
           </p>
           <p className="text-xs font-medium" style={{ color: 'var(--text-tertiary)' }}>
-            {step === 'name' ? 50 : 100}%
+            50%
           </p>
         </div>
         <div
@@ -70,7 +82,7 @@ export function OnboardingWizard() {
         >
           <div
             className="h-full rounded-full transition-all duration-500"
-            style={{ width: step === 'name' ? '50%' : '100%', background: 'var(--accent)' }}
+            style={{ width: '50%', background: 'var(--accent)' }}
           />
         </div>
       </div>
@@ -84,20 +96,10 @@ export function OnboardingWizard() {
           boxShadow: 'var(--shadow-card)',
         }}
       >
-        {step === 'name' && (
-          <StepStoreName
-            defaultValues={{ storeName: data.storeName, subdomain: data.subdomain }}
-            onNext={goToTemplate}
-          />
-        )}
-        {step === 'template' && (
-          <StepTemplate
-            defaultValues={{ templateKey: data.templateKey }}
-            onNext={finish}
-            onBack={goBack}
-            error={error}
-          />
-        )}
+        <StepStoreName
+          defaultValues={{ storeName: data.storeName, subdomain: data.subdomain }}
+          onNext={goToTemplate}
+        />
       </div>
     </div>
   );

@@ -7,26 +7,14 @@ import { useAuthStore } from '@/store/auth.store';
 
 export default function DashboardIndexPage() {
   const router = useRouter();
-  const user = useAuthStore((s) => s.user);
   const stores = useAuthStore((s) => s.stores);
-  const isInitialised = useAuthStore((s) => s.isInitialised);
 
   useEffect(() => {
-    if (!isInitialised) return;
-
-    // Not authenticated — AuthInitialiser handles redirect to /login
-    // but we guard here too just in case
-    if (!user) {
-      router.replace('/login');
-      return;
-    }
-
-    if (stores.length === 0) {
-      router.replace('/onboarding');
-    } else {
+    if (stores.length > 0) {
       router.replace(`/dashboard/${stores[0].id}`);
     }
-  }, [isInitialised, stores]);
+    // stores.length === 0 is handled by DashboardLayout
+  }, [stores]);
 
   return (
     <div className="flex items-center justify-center h-full">

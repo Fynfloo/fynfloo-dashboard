@@ -1,7 +1,8 @@
 'use client';
+import Image from 'next/image';
+import { Eye } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { TemplateItem } from '../hooks/useTemplates';
-import Image from 'next/image';
 
 type Props = {
   template: TemplateItem;
@@ -14,19 +15,59 @@ export function TemplateCard({ template, isSelected, onSelect, onPreview }: Prop
   return (
     <div
       className={cn(
-        'relative rounded-[var(--radius-lg)] border-2 cursor-pointer transition-all duration-150 overflow-hidden',
+        'group rounded-[var(--radius-lg)] overflow-hidden cursor-pointer transition-all duration-150',
       )}
       style={{
-        border: isSelected ? '2px solid var(--accent)' : '2px solid transparent',
-        background: 'var(--bg-elevated)',
+        border: isSelected ? '2px solid var(--accent)' : '2px solid var(--bg-border)',
+        background: 'var(--bg-surface)',
       }}
       onClick={onSelect}
     >
       {/* Thumbnail */}
-      <div className="w-full aspect-video" style={{ background: 'var(--bg-border)' }}>
-        {template.thumbnail && (
+      <div
+        className="relative w-full aspect-video overflow-hidden"
+        style={{ background: 'var(--bg-elevated)' }}
+      >
+        {template.thumbnail ? (
           <Image src={template.thumbnail} alt={template.name} fill className="object-cover" />
+        ) : (
+          <div
+            className="w-full h-full"
+            style={{
+              background: 'linear-gradient(135deg, var(--bg-border) 0%, var(--bg-elevated) 100%)',
+            }}
+          />
         )}
+
+        {/* Hover overlay */}
+        <div
+          className="absolute inset-0 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+          style={{ background: 'rgba(0,0,0,0.45)' }}
+        >
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onPreview();
+            }}
+            className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-lg"
+            style={{ background: '#fff', color: '#111' }}
+          >
+            <Eye className="h-3.5 w-3.5" />
+            Preview
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelect();
+            }}
+            className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-lg"
+            style={{ background: 'var(--accent)', color: '#fff' }}
+          >
+            Select
+          </button>
+        </div>
       </div>
 
       {/* Info */}
@@ -49,23 +90,6 @@ export function TemplateCard({ template, isSelected, onSelect, onPreview }: Prop
           ))}
         </div>
       </div>
-
-      {/* Preview button */}
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          onPreview();
-        }}
-        className="absolute top-2 right-2 text-xs px-2 py-1 rounded-md"
-        style={{
-          background: 'var(--bg-surface)',
-          color: 'var(--text-primary)',
-          border: '1px solid var(--bg-border)',
-        }}
-      >
-        Preview
-      </button>
     </div>
   );
 }
