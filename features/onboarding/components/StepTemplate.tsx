@@ -1,112 +1,116 @@
-// features/onboarding/components/StepTemplate.tsx
 'use client';
-
 import { useState } from 'react';
-import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { TEMPLATES } from '@/lib/constants';
-import type { OnboardingData } from './OnboardingWizard';
 import { AlertCircle } from 'lucide-react';
+import { useTemplates } from '../hooks/useTemplates';
+import { TemplateCard } from './TemplateCard';
+import { TemplatePreviewModal } from './TemplatePreviewModal';
+import type { TemplateItem } from '../hooks/useTemplates';
 
 type Props = {
-  defaultValues: Pick<OnboardingData, 'templateKey' | 'businessType'>;
-  onNext: (data: Pick<OnboardingData, 'templateKey' | 'businessType'>) => void;
+  defaultValues: { templateKey: string };
+  onNext: (templateKey: string) => void;
   onBack: () => void;
+  error?: string;
 };
 
-export function StepTemplate({ defaultValues, onNext, onBack }: Props) {
+export function StepTemplate({ defaultValues, onNext, onBack, error }: Props) {
+  const { templates, isLoading } = useTemplates();
   const [selected, setSelected] = useState(defaultValues.templateKey);
-  const [error, setError] = useState('');
+  const [preview, setPreview] = useState<TemplateItem | null>(null);
+  const [localError, setLocalError] = useState('');
 
   function handleNext() {
     if (!selected) {
-      setError('Please select a template');
+      setLocalError('Please select a template');
       return;
     }
-    const template = TEMPLATES.find((t) => t.key === selected)!;
-    onNext({ templateKey: template.key, businessType: template.businessType });
+    onNext(selected);
   }
 
+  const displayError = error || localError;
+
   return (
-    <div className="space-y-6">
-      <div className="space-y-1">
-        <h2
-          className="text-xl font-bold"
-          style={{ color: 'var(--text-primary)', letterSpacing: '-0.025em' }}
-        >
-          Choose a template
-        </h2>
-        <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-          Pick the style that fits your brand. You can customise everything later.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        {TEMPLATES.map((template) => {
-          const isSelected = selected === template.key;
-          return (
-            <button
-              key={template.key}
-              type="button"
-              onClick={() => {
-                setSelected(template.key);
-                setError('');
-              }}
-              className={cn(
-                'text-left p-4 rounded-[var(--radius-lg)] border transition-all duration-150',
-                'focus-visible:outline-none',
-              )}
-              style={{
-                background: isSelected ? 'var(--accent-dim)' : 'var(--bg-elevated)',
-                border: isSelected ? '2px solid var(--accent)' : '2px solid transparent',
-              }}
-            >
-              {/* Template preview dot */}
-              <div
-                className="w-8 h-8 rounded-lg mb-3"
-                style={{ background: isSelected ? 'var(--accent)' : 'var(--bg-border)' }}
-              />
-              <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-                {template.name}
-              </p>
-              <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
-                {template.description}
-              </p>
-              <p className="text-xs mt-1.5" style={{ color: 'var(--text-tertiary)' }}>
-                Ref: {template.reference}
-              </p>
-            </button>
-          );
-        })}
-      </div>
-
-      {error && (
-        <p className="flex items-center gap-1 text-xs" style={{ color: 'var(--red)' }}>
-          <AlertCircle className="h-3 w-3 shrink-0" />
-          {error}
-        </p>
+    <>
+      {preview && (
+        <TemplatePreviewModal
+          template={preview}
+          onClose={() => setPreview(null)}
+          onSelect={() => {
+            setSelected(preview.key);
+            setPreview(null);
+          }}
+        />
       )}
 
-      <div className="flex gap-3 pt-2">
-        <Button
-          type="button"
-          variant="secondary"
-          size="lg"
-          className="flex-1 h-11"
-          onClick={onBack}
-        >
-          Back
-        </Button>
-        <Button
-          type="button"
-          size="lg"
-          className="flex-1 h-11"
-          onClick={handleNext}
-          disabled={!selected}
-        >
-          Continue
-        </Button>
+      <div className="space-y-6">
+        <div className="space-y-1">
+          <h2
+            className="text-xl font-bold"
+            style={{ color: 'var(--text-primary)', letterSpacing: '-0.025em' }}
+          >
+            Choose a template
+          </h2>
+          <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+            Pick the style that fits your brand. You can customise everything later.
+          </p>
+        </div>
+
+        {isLoading ? (
+          <div className="grid grid-cols-2 gap-3">
+            {[0, 1].map((i) => (
+              <div
+                key={i}
+                className="rounded-[var(--radius-lg)] aspect-video animate-pulse"
+                style={{ background: 'var(--bg-elevated)' }}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            {templates.map((template) => (
+              <TemplateCard
+                key={template.key}
+                template={template}
+                isSelected={selected === template.key}
+                onSelect={() => {
+                  setSelected(template.key);
+                  setLocalError('');
+                }}
+                onPreview={() => setPreview(template)}
+              />
+            ))}
+          </div>
+        )}
+
+        {displayError && (
+          <p className="flex items-center gap-1 text-xs" style={{ color: 'var(--red)' }}>
+            <AlertCircle className="h-3 w-3 shrink-0" />
+            {displayError}
+          </p>
+        )}
+
+        <div className="flex gap-3 pt-2">
+          <Button
+            type="button"
+            variant="secondary"
+            size="lg"
+            className="flex-1 h-11"
+            onClick={onBack}
+          >
+            Back
+          </Button>
+          <Button
+            type="button"
+            size="lg"
+            className="flex-1 h-11"
+            onClick={handleNext}
+            disabled={!selected}
+          >
+            Continue
+          </Button>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

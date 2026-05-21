@@ -1,59 +1,56 @@
-// features/onboarding/components/OnboardingWizard.tsx
 'use client';
-
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { StepStoreName } from './StepStoreName';
 import { StepTemplate } from './StepTemplate';
-import { StepCurrency } from './StepCurrency';
-import { useOnboarding } from '@/features/onboarding/hooks/useOnboarding';
+import { BuildingScreen } from './BuildingScreen';
+import { useOnboarding } from '../hooks/useOnboarding';
 
-export type OnboardingData = {
+type OnboardingData = {
   storeName: string;
   subdomain: string;
   templateKey: string;
-  businessType: string;
-  currency: string;
 };
 
-const TOTAL_STEPS = 3;
+type Step = 'name' | 'template' | 'building';
 
 export function OnboardingWizard() {
   const router = useRouter();
-  const { createStore, isPending } = useOnboarding();
-
-  const [step, setStep] = useState(1);
+  const { createBusiness } = useOnboarding();
+  const [step, setStep] = useState<Step>('name');
   const [data, setData] = useState<OnboardingData>({
     storeName: '',
     subdomain: '',
     templateKey: '',
-    businessType: '',
-    currency: '',
   });
   const [error, setError] = useState('');
 
-  function next(updates: Partial<OnboardingData>) {
+  function goToTemplate(updates: Pick<OnboardingData, 'storeName' | 'subdomain'>) {
     setData((prev) => ({ ...prev, ...updates }));
-    setStep((s) => s + 1);
+    setStep('template');
   }
 
-  function back() {
-    setStep((s) => s - 1);
+  function goBack() {
+    setStep('name');
     setError('');
   }
 
-  async function finish(updates: Partial<OnboardingData>) {
-    const final = { ...data, ...updates };
+  async function finish(templateKey: string) {
+    const final = { ...data, templateKey };
     setData(final);
+    setStep('building');
     setError('');
     try {
-      const tenantId = await createStore(final);
-      router.replace(`/dashboard/${tenantId}`);
+      const tenantId = await createBusiness(final);
+      router.replace(`/dashboard/${tenantId}/editor`);
     } catch (err: unknown) {
       const e = err as { message?: string };
       setError(e?.message ?? 'Something went wrong — please try again');
+      setStep('template');
     }
   }
+
+  if (step === 'building') return <BuildingScreen businessName={data.storeName} />;
 
   return (
     <div className="w-full max-w-lg">
@@ -61,10 +58,10 @@ export function OnboardingWizard() {
       <div className="mb-8 space-y-3">
         <div className="flex items-center justify-between">
           <p className="text-xs font-medium" style={{ color: 'var(--text-tertiary)' }}>
-            Step {step} of {TOTAL_STEPS}
+            Step {step === 'name' ? 1 : 2} of 2
           </p>
           <p className="text-xs font-medium" style={{ color: 'var(--text-tertiary)' }}>
-            {Math.round((step / TOTAL_STEPS) * 100)}%
+            {step === 'name' ? 50 : 100}%
           </p>
         </div>
         <div
@@ -73,10 +70,7 @@ export function OnboardingWizard() {
         >
           <div
             className="h-full rounded-full transition-all duration-500"
-            style={{
-              width: `${(step / TOTAL_STEPS) * 100}%`,
-              background: 'var(--accent)',
-            }}
+            style={{ width: step === 'name' ? '50%' : '100%', background: 'var(--accent)' }}
           />
         </div>
       </div>
@@ -90,25 +84,17 @@ export function OnboardingWizard() {
           boxShadow: 'var(--shadow-card)',
         }}
       >
-        {step === 1 && (
+        {step === 'name' && (
           <StepStoreName
             defaultValues={{ storeName: data.storeName, subdomain: data.subdomain }}
-            onNext={next}
+            onNext={goToTemplate}
           />
         )}
-        {step === 2 && (
+        {step === 'template' && (
           <StepTemplate
-            defaultValues={{ templateKey: data.templateKey, businessType: data.businessType }}
-            onNext={next}
-            onBack={back}
-          />
-        )}
-        {step === 3 && (
-          <StepCurrency
-            defaultValues={{ currency: data.currency }}
-            onFinish={finish}
-            onBack={back}
-            isPending={isPending}
+            defaultValues={{ templateKey: data.templateKey }}
+            onNext={finish}
+            onBack={goBack}
             error={error}
           />
         )}

@@ -1,7 +1,6 @@
-// features/onboarding/hooks/useOnboarding.ts
+'use client';
 import { useState } from 'react';
-import { apiRequest } from '@/lib/api';
-import { setAccessToken } from '@/lib/api';
+import { apiRequest, setAccessToken } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
 import type { Store } from '@/lib/types';
 
@@ -13,16 +12,12 @@ type CreateTenantResponse = {
   expiresIn: number;
 };
 
-type SubdomainCheckResponse = {
-  available: boolean;
-};
+type SubdomainCheckResponse = { available: boolean };
 
-type OnboardingData = {
+export type OnboardingInput = {
   storeName: string;
   subdomain: string;
   templateKey: string;
-  businessType: string;
-  currency: string;
 };
 
 export function useOnboarding() {
@@ -41,28 +36,30 @@ export function useOnboarding() {
     }
   }
 
-  async function createStore(data: OnboardingData): Promise<string> {
+  async function createBusiness(input: OnboardingInput): Promise<string> {
     setIsPending(true);
     try {
+      // 1. Create tenant
       const res = await apiRequest<CreateTenantResponse>('/api/tenant/create', {
         method: 'POST',
-        body: {
-          storeName: data.storeName,
-          subdomain: data.subdomain,
-          templateKey: data.templateKey,
-          businessType: data.businessType,
-        },
+        body: { storeName: input.storeName, subdomain: input.subdomain },
       });
 
-      // Update access token — new JWT includes tenant claim
+      // 2. Update token so apply-template call is authenticated
       setAccessToken(res.accessToken, res.expiresIn);
 
-      // Update stores in Zustand
+      // 3. Apply template — creates V2 pages + shell
+      await apiRequest(`/api/business/${res.tenantId}/apply-template`, {
+        method: 'POST',
+        body: { templateKey: input.templateKey },
+      });
+
+      // 4. Update local store list
       const newStore: Store = {
         id: res.tenantId,
-        name: data.storeName,
-        subdomain: data.subdomain,
-        currency: data.currency,
+        name: input.storeName,
+        subdomain: input.subdomain,
+        currency: 'GBP',
         stripeChargesEnabled: false,
       };
       setStores([...stores, newStore]);
@@ -73,5 +70,5 @@ export function useOnboarding() {
     }
   }
 
-  return { checkSubdomain, createStore, isPending };
+  return { checkSubdomain, createBusiness, isPending };
 }

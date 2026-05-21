@@ -11,10 +11,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useOnboarding } from '@/features/onboarding/hooks/useOnboarding';
 import { useDebounce } from '@/hooks/useDebounce';
-import type { OnboardingData } from './OnboardingWizard';
-
 const schema = z.object({
-  storeName: z.string().min(2, 'Store name must be at least 2 characters').max(60),
+  storeName: z.string().min(2, 'Business name must be at least 2 characters').max(60),
   subdomain: z
     .string()
     .min(2, 'Subdomain must be at least 2 characters')
@@ -32,9 +30,11 @@ function slugify(value: string): string {
     .replace(/^-|-$/g, '');
 }
 
+type StepOneData = { storeName: string; subdomain: string };
+
 type Props = {
-  defaultValues: Pick<OnboardingData, 'storeName' | 'subdomain'>;
-  onNext: (data: Pick<OnboardingData, 'storeName' | 'subdomain'>) => void;
+  defaultValues: StepOneData;
+  onNext: (data: StepOneData) => void;
 };
 
 export function StepStoreName({ defaultValues, onNext }: Props) {
@@ -89,22 +89,22 @@ export function StepStoreName({ defaultValues, onNext }: Props) {
           className="text-xl font-bold"
           style={{ color: 'var(--text-primary)', letterSpacing: '-0.025em' }}
         >
-          Name your store
+          Name your business
         </h2>
         <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-          This is how customers will find you. You can change the name later.
+          This is how visitors will find you. You can change the name later.
         </p>
       </div>
 
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
         <div>
           <Label htmlFor="storeName" className="block mb-2">
-            Store name
+            Business name
           </Label>
           <Input
             id="storeName"
             autoFocus
-            placeholder="My Awesome Store"
+            placeholder="My Awesome Business"
             error={!!form.formState.errors.storeName}
             {...form.register('storeName')}
             onChange={handleStoreNameChange}
@@ -119,7 +119,7 @@ export function StepStoreName({ defaultValues, onNext }: Props) {
 
         <div>
           <Label htmlFor="subdomain" className="block mb-2">
-            Store URL
+            Website address
           </Label>
           <div className="flex items-center gap-0">
             <Input
